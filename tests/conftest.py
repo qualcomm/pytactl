@@ -4,21 +4,25 @@
 """Shared fixtures and helpers for the pytactl test suite.
 
 The tests mock the USB layer (and the underlying GPIO/serial hardware) so that
-every config file under ``tac_configs/`` can be loaded through the exact same
-code path that ``pytactl.shell`` and ``pytactl.service`` use:
+every ``*.pinout.json`` config of the installed config set can be loaded through
+the exact same code path that ``pytactl.shell`` and ``pytactl.service`` use:
 ``Board.create_board()``.
+
+The config set is the one ``pytactl installconfigs`` produces: every upstream
+config converted to the shared pinout format (see :mod:`pytactl.tacconfig`).
 
 A handful of configs are deliberately handled specially (see the maps below):
 
 * EXCLUDED_CONFIGS   - not driven by the config-script path at all, so the suite
                        does not try to load them through FtdiBoard/PsocBoard.
-* XFAIL_LOAD         - configs that currently fail to parse/exec. Left unchanged
-                       on purpose; tracked as expected failures.
+* XFAIL_LOAD         - configs that fail to parse/exec. Upstream data problems
+                       that cannot be fixed from the config alone; tracked as
+                       expected failures.
 * XFAIL_REQUIRED     - configs that load fine but legitimately omit one or more
                        of powerOn/powerOff/bootToEDL (the README notes that not
                        every board defines every command).
-* XFAIL_EXECUTE      - configs whose scripts reference a pin that is disabled in
-                       that config, so invoking the quick method raises.
+* XFAIL_EXECUTE      - configs whose scripts drive a command that no pin in the
+                       config defines, so invoking the quick method raises.
 """
 
 import glob
@@ -31,32 +35,36 @@ from unittest.mock import MagicMock
 import pytest
 
 import pytactl
-from pytactl import debugboard
+from pytactl import debugboard, tacconfig
+
+# The config set is discovered by its shared pinout files; the UI overlays that
+# may sit beside them upstream are not loaded by pytactl.
+PINOUT_GLOB = "*" + tacconfig.PINOUT_EXTENSION
 
 
 def resolve_config_dir():
     """Locate the directory holding the full TAC config set, or ``None``.
 
-    The data-driven tests need the upstream config set (every ``.tcnf`` plus
-    ``devicelist.json``), which is *not* part of this repository: it is fetched
-    from qcom-test-automation-controller with "pytactl installconfigs". Only
-    ``TAC_FTDI_13.tcnf`` ships inside the package itself.
-
-    Candidates, in order:
+    Candidates, in order - the same precedence ``pytactl`` itself applies, plus
+    the environment override on top:
 
     1. ``$PYTACTL_TAC_CONFIG_DIR`` - explicit override, for distro packagers and
-       anyone who unpacks the config set somewhere of their own choosing.
-    2. ``pytactl.INSTALLED_TAC_CONFIG_PATH`` - where "installconfigs" puts it.
+       anyone who unpacks a config set somewhere of their own choosing.
+    2. ``pytactl.INSTALLED_TAC_CONFIG_PATH`` - a newer upstream set pulled with
+       "pytactl installconfigs", so the suite tests against that when it exists.
+    3. ``pytactl.PACKAGE_TAC_CONFIG_PATH`` - the config set vendored in this
+       repository, which is what a plain checkout tests against.
 
-    Returns ``None`` when neither holds any ``.tcnf`` file - e.g. an isolated
-    distro build environment with no network access - so that the config-driven
+    Returns ``None`` when none of them holds a ``.pinout.json`` file - e.g. a
+    distro build that strips the bundled configs - so that the config-driven
     tests skip instead of failing with FileNotFoundError.
     """
     for candidate in (
         os.environ.get("PYTACTL_TAC_CONFIG_DIR"),
         pytactl.INSTALLED_TAC_CONFIG_PATH,
+        pytactl.PACKAGE_TAC_CONFIG_PATH,
     ):
-        if candidate and glob.glob(os.path.join(candidate, "*.tcnf")):
+        if candidate and glob.glob(os.path.join(candidate, PINOUT_GLOB)):
             return candidate
     return None
 
@@ -65,12 +73,26 @@ def resolve_config_dir():
 CONFIG_DIR = resolve_config_dir()
 
 NO_CONFIGS_REASON = (
-    "TAC config set not available: fetch it with 'pytactl installconfigs' or "
-    "point PYTACTL_TAC_CONFIG_DIR at a directory containing the .tcnf files"
+    "TAC config set not available: the configs bundled in pytactl/tac_configs "
+    "are missing, and neither PYTACTL_TAC_CONFIG_DIR nor the directory written "
+    "by 'pytactl installconfigs' holds any .pinout.json file"
 )
 
-# Skip marker for tests that cannot run without the external config set.
+# Skip marker for tests that cannot run without a config set.
 requires_configs = pytest.mark.skipif(CONFIG_DIR is None, reason=NO_CONFIGS_REASON)
+
+# Some tests are about the config set vendored into the package specifically,
+# not whichever set was resolved above. A distro that de-vendors those configs
+# and repoints PYTACTL_TAC_CONFIG_DIR at its own copy has nothing for them to
+# check, so they skip rather than fail the build.
+BUNDLED_CONFIGS = bool(
+    glob.glob(os.path.join(pytactl.PACKAGE_TAC_CONFIG_PATH, PINOUT_GLOB))
+)
+
+requires_bundled_configs = pytest.mark.skipif(
+    not BUNDLED_CONFIGS,
+    reason="the config set bundled in pytactl/tac_configs is not present",
+)
 
 
 def config_path_or_skip(name):
@@ -95,48 +117,64 @@ EXCLUDED_CONFIGS = {
     # PIC32CX uses a third dispatch path (udev detection + serial-prefix config
     # matching) rather than the FTDI/PSOC USB-descriptor path the data-driven
     # tests model. Covered directly by test_create_board_dispatches_pic32cx.
-    "TAC_PIC32CXAuto_54.tcnf": "PIC32CXAuto uses a dedicated dispatch path",
+    "TAC_PIC32CXAuto_54.pinout.json": "PIC32CXAuto uses a dedicated dispatch path",
     # Bughopper board: handled by BughopperV1Board/BughopperV2Board (driven over
     # USB control / HID transfers), not by a config script.
-    "TAC_FTDI_80.tcnf": "Bughopper board, handled by a dedicated board class",
+    "TAC_FTDI_80.pinout.json": "Bughopper board, handled by a dedicated board class",
 }
 
-# Configs that currently fail to parse/exec. Intentionally left unchanged.
+# Configs that fail to parse/exec. Upstream data problems: left unchanged here,
+# because fixing one means supplying a value only the board's owner knows.
 XFAIL_LOAD = {
-    "TAC_FTDI_51.tcnf": "wrong indentation",
-    "TAC_FTDI_52.tcnf": "wrong indentation",
-    "TAC_FTDI_72.tcnf": "wrong indentation",
-    "TAC_FTDI_77.tcnf": "wrong indentation",
+    "TAC_FTDI_72.pinout.json": (
+        "script uses $edl/$uefi/$fastboot but the config declares no variables; "
+        "the delays are board timings only the config can supply"
+    ),
 }
 
 # Configs that load but do not define all three of powerOn/powerOff/bootToEDL.
+# Not defects to fix here: powerOn is not an alias for the powerOnTheDevice most
+# of these do define - across the 28 configs defining both, powerOn calls
+# powerOnTheDevice and then presses the power key for a board-specific hold time
+# - so synthesising one would mean inventing a power-up sequence. The rest name
+# their functions per board (two SoCs, two EDL entries) or have no script at all.
 XFAIL_REQUIRED = {
-    "TAC_FTDI_15.tcnf": "defines bootToEDL only; no powerOn/powerOff",
-    "TAC_FTDI_16.tcnf": "no bootToEDL (board without EDL entry)",
-    "TAC_FTDI_41.tcnf": "uses spowerOn/bootToSDXEDL variants; no powerOn/bootToEDL",
-    "TAC_FTDI_42.tcnf": "empty script (SMART LABEL board defines no functions)",
-    "TAC_FTDI_60.tcnf": "defines bootToEDL/bootToUEFI only; no powerOn/powerOff",
-    "TAC_PSOC_24.tcnf": "defines bootToEDL variants only; no powerOn/powerOff",
-    "TAC_PSOC_31.tcnf": "defines bootToNADEDL/bootToEAPEDL variants; no bootToEDL",
+    "TAC_FTDI_15.pinout.json": "defines bootToEDL only; no powerOn/powerOff",
+    "TAC_FTDI_16.pinout.json": "no bootToEDL (board without EDL entry)",
+    "TAC_FTDI_41.pinout.json": "uses spowerOn/bootToSDXEDL variants; no powerOn/bootToEDL",
+    "TAC_FTDI_42.pinout.json": "empty script (SMART LABEL board defines no functions)",
+    "TAC_FTDI_60.pinout.json": "defines bootToEDL/bootToUEFI only; no powerOn/powerOff",
+    "TAC_PSOC_24.pinout.json": "defines bootToEDL variants only; no powerOn/powerOff",
+    "TAC_PSOC_31.pinout.json": "defines bootToNADEDL/bootToEAPEDL variants; no bootToEDL",
 }
 
-# Configs whose powerOn/powerOff/bootToEDL reference a pin that is disabled in
-# that config, so the bound quick method raises AttributeError when invoked.
+# Configs whose powerOn/powerOff/bootToEDL drive a command that no pin in the
+# config defines, so the bound quick method raises AttributeError when invoked.
+# Each is an upstream data problem: a script carrying lines for hardware the
+# board does not have (TAC_FTDI_29 is an RF switch box running a phone script;
+# the M.2 modem cards have no power key or volume buttons). Which physical pin
+# to bind - if any - is a question only the board's owner can answer, so these
+# stay as they are. pytactl names the commands in a warning at load time.
 XFAIL_EXECUTE = {
-    "TAC_FTDI_23.tcnf": "script uses 'pkey' which is disabled in this config",
-    "TAC_FTDI_29.tcnf": "script uses 'battery' which is disabled in this config",
-    "TAC_FTDI_56.tcnf": "script uses 'usb1' which is disabled in this config",
-    "TAC_FTDI_65.tcnf": "script uses 'usb1' which is disabled in this config",
-    "TAC_FTDI_67.tcnf": "script uses 'usb1' which is disabled in this config",
-    "TAC_FTDI_69.tcnf": "script uses 'pkey' which is disabled in this config",
-    "TAC_FTDI_72.tcnf": "script uses 'battery' which is disabled in this config",
-    "TAC_FTDI_73.tcnf": "script uses 'usb1' which is disabled in this config",
+    "TAC_FTDI_23.pinout.json": "drives pkey/voldn/volup; M.2 card has no such pins",
+    "TAC_FTDI_29.pinout.json": (
+        "phone script on an RF switch box: drives battery/pedl/pkey/sedl/usb0/"
+        "voldn/volup, board only has VC1-VC3"
+    ),
+    "TAC_FTDI_56.pinout.json": "drives usb1; board only defines usb0",
+    "TAC_FTDI_65.pinout.json": "drives sedl/usb1; board defines neither",
+    "TAC_FTDI_67.pinout.json": (
+        "drives sedl/usb1, and sumxs2 which looks like a typo for the board's smuxs2"
+    ),
+    "TAC_FTDI_69.pinout.json": "drives pkey/voldn/volup; M.2 card has no such pins",
+    "TAC_FTDI_72.pinout.json": "undeclared variables; never reaches execution",
+    "TAC_FTDI_73.pinout.json": "drives sedl/usb1; board defines neither",
 }
 
 
 # Describes how to make Board.create_board() load a particular config file:
 # which USB device to fake and which match key to advertise in devicelist.json.
-#   platform_type: the value declared inside the .tcnf (FTDI, PSOC, ...)
+#   platform_type: the value declared inside the pinout config (FTDI, PSOC, ...)
 #   dispatch:      which board class create_board() routes to, "FTDI" or "PSOC".
 #                  debugboard only knows two config-matching mechanisms:
 #                  FtdiBoard matches by usb_descriptor, PsocBoard by platform_id.
@@ -146,14 +184,14 @@ ConfigEntry = namedtuple(
 
 
 def discover_configs():
-    """Return the testable ``.tcnf`` config files (excluding special cases).
+    """Return the testable ``.pinout.json`` config files (excluding special cases).
 
     Empty when the external config set is not available (see
     :func:`resolve_config_dir`).
     """
     if CONFIG_DIR is None:
         return []
-    paths = sorted(glob.glob(os.path.join(CONFIG_DIR, "*.tcnf")))
+    paths = sorted(glob.glob(os.path.join(CONFIG_DIR, PINOUT_GLOB)))
     return [p for p in paths if os.path.basename(p) not in EXCLUDED_CONFIGS]
 
 
@@ -252,6 +290,10 @@ def prepared_configs(tmp_path_factory):
     """Build an isolated tac_config dir containing every testable config plus a
     generated ``devicelist.json`` that maps each one to a unique match key.
 
+    The real ``devicelist.json`` matches most boards on a descriptor or platform
+    id that only one config claims, so it cannot be used to reach every config
+    from a fake USB device; this synthetic one can.
+
     Returns ``(config_dir, entries)`` where ``entries`` maps config basename to
     a :class:`ConfigEntry` describing how to load it via ``create_board``.
 
@@ -265,10 +307,12 @@ def prepared_configs(tmp_path_factory):
     entries = {}
 
     # Mirror what "installconfigs" does: install the bundled FTDI Alpaca-Lite
-    # config as default.tcnf, the file FtdiBoard falls back to when a device's
-    # USB descriptor matches no catalog entry.
+    # config as default.pinout.json, the file FtdiBoard falls back to when a
+    # device's USB descriptor matches no catalog entry.
     shutil.copy(
-        os.path.join(pytactl.PACKAGE_TAC_CONFIG_PATH, "TAC_FTDI_13.tcnf"),
+        os.path.join(
+            pytactl.PACKAGE_TAC_CONFIG_PATH, pytactl.BUNDLED_DEFAULT_CONFIG_FILENAME
+        ),
         os.path.join(dst, pytactl.DEFAULT_CONFIG_FILENAME),
     )
 
@@ -284,18 +328,14 @@ def prepared_configs(tmp_path_factory):
             # over serial; assign a unique synthetic id we can return from the
             # mocked __get_board_id.
             platform_id = 90000 + len(entries)
-            catalog.append(
-                {"platform_id": platform_id, "configPath": f"tac_configs/{base}"}
-            )
+            catalog.append({"platform_id": platform_id, "configPath": base})
             entries[base] = ConfigEntry(base, path, platform_type, "PSOC", platform_id)
         else:
             # FTDI (and any other FTDI-USB board): FtdiBoard matches
             # catalog["usb_descriptor"] against device.product. Use a unique
             # synthetic descriptor per file.
             descriptor = f"PYTACTL_TEST::{base}"
-            catalog.append(
-                {"usb_descriptor": descriptor, "configPath": f"tac_configs/{base}"}
-            )
+            catalog.append({"usb_descriptor": descriptor, "configPath": base})
             entries[base] = ConfigEntry(base, path, platform_type, "FTDI", descriptor)
 
     with open(os.path.join(dst, "devicelist.json"), "w") as handle:

@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause
+
+metadata:
+  format: Lava-Test Test Definition 1.0
+  name: pytactl-host
+  description: >
+    Build and check pytactl - the host half of a LAVA board - inside a container
+    on the dispatcher. Runs the unit suite against the bundled config set, then
+    asserts what the lab's device dictionaries actually need from a config.
+  maintainer:
+    - milosz.wasilewski@oss.qualcomm.com
+  os:
+    - debian
+  scope:
+    - functional
+
+run:
+  steps:
+    - 'echo "=== checkout ==="; pwd; ls'
+    - 'apt-get update -qq && apt-get install -y -qq --no-install-recommends
+       git libusb-1.0-0 libhidapi-hidraw0 libhidapi-libusb0 >/dev/null 2>&1
+       && lava-test-case system-deps --result pass
+       || lava-test-case system-deps --result fail'
+    - 'pip install --quiet ".[dev]"
+       && lava-test-case pip-install --result pass
+       || lava-test-case pip-install --result fail'
+    - 'pytactl --version'
+    # The unit suite runs against the config set bundled in the wheel, so this
+    # covers every config the lab could hand a board.
+    - 'python -m pytest -q 2>&1 | tail -20 > /tmp/pytest.out; cat /tmp/pytest.out'
+    - 'if grep -qE "^[0-9]+ passed" /tmp/pytest.out; then lava-test-case unit-tests --result pass; else lava-test-case unit-tests --result fail; fi'
+    - 'grep -oE "[0-9]+ passed" /tmp/pytest.out | grep -oE "^[0-9]+" | head -1 | xargs -r -I{} lava-test-case unit-tests-passed --result pass --measurement {} --units tests'
+    # Host-side checks: config set integrity, the format rules the loader
+    # enforces, and an audit of what the device dictionaries ask for.
+    - 'python lava/host_checks.py'

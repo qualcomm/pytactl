@@ -16,7 +16,7 @@ import usb
 from pexpect import fdpexpect
 from pyftdi.gpio import GpioAsyncController
 
-from . import DEFAULT_CONFIG_FILENAME
+from . import default_config_file, tacconfig
 
 logger = logging.getLogger()
 
@@ -35,10 +35,19 @@ BITMODE_CBUS = 0x20
 # USB ctrl transfer request for FT230X CBUS
 SIO_SET_BITMODE_REQUEST = 0x0B
 
+# platform_type values in a TAC config that describe an FTDI-based board.
+FTDI_PLATFORM_TYPES = ("FTDI", "FT232H")
+
 
 class TACException(Exception):
     status_code = 420
     detail = "Unable to perform requested operation"
+
+
+class ConfigScriptError(TACException):
+    """A config script pytactl cannot turn into callable board commands."""
+
+    detail = "Unable to parse the board configuration script"
 
 
 class Board(dict):
@@ -190,31 +199,6 @@ class Board(dict):
     def create_pins(self):
         raise NotImplementedError()
 
-    def _enabled_pin_commands(self):
-        # Command names claimed by enabled pins. A disabled pin is only
-        # skipped when its command collides with one of these (see the
-        # create_pins implementations).
-        #
-        # This is computed once, up front, from the full config so the
-        # decision does not depend on the order pins are processed in: a
-        # disabled pin is dropped whether it is seen before or after the
-        # enabled pin it collides with.
-        return {
-            p.get("command")
-            for p in self.full_config.get("pins", [])
-            if p.get("enabled", True)
-        }
-
-    def _skip_disabled_pin(self, pin_config, enabled_commands):
-        # Disabled pins used to be dropped unconditionally to avoid name
-        # collisions when two pins share a command and only one is enabled.
-        # Now a disabled pin is only ignored when it actually collides with
-        # an enabled pin; otherwise it is added like any other pin.
-        return (
-            not pin_config.get("enabled", True)
-            and pin_config.get("command") in enabled_commands
-        )
-
     def create_ports(self):
         raise NotImplementedError()
 
@@ -229,10 +213,63 @@ class Board(dict):
             sanitized = f"{sanitized}_"
         return sanitized
 
+    @staticmethod
+    def _check_script_indentation(script):
+        """Require every statement in the script to be indented with one tab.
+
+        TAC config scripts are written with tabs: a ``def`` at column 0 and its
+        body one tab in. pytactl holds configs to that rather than accepting
+        whatever whitespace happens to be there, so that a stray space-indented
+        line is reported against the config instead of being quietly absorbed.
+        ``pytactl convertconfigs`` normalises a config directory to tabs, and
+        the configs shipped with pytactl have been through it.
+        """
+        offenders = []
+        for number, line in enumerate(script.splitlines(), 1):
+            if not line.strip():
+                # Blank lines are not statements, whatever they are made of.
+                continue
+            indent = line[: len(line) - len(line.lstrip())]
+            if indent and indent != "\t":
+                offenders.append(number)
+
+        if offenders:
+            raise ConfigScriptError(
+                "Config script must indent statements with a single tab, but "
+                "line(s) "
+                + ", ".join(str(number) for number in offenders)
+                + " use other whitespace. Run 'pytactl convertconfigs' on the "
+                "config directory to normalise it."
+            )
+
+    def _check_script_commands(self, script):
+        """Warn about commands the script drives that no pin implements.
+
+        Such a command becomes an AttributeError deep inside the config script
+        the first time the board is asked to do something - typically when
+        someone tries to power a board on. Saying so up front, naming the
+        commands, points at the config instead.
+        """
+        defined = set(re.findall(r"^def\s+(\w+)", script, re.MULTILINE))
+        # Driving a pin is "<command> <value>"; a bare "<name>" line calls
+        # another function. delay/logComment are the language's own statements.
+        referenced = set(re.findall(r"^[ \t]+(\w+)[ \t]+\S", script, re.MULTILINE))
+        unbound = sorted(
+            referenced - defined - set(self.commands) - {"delay", "logComment"}
+        )
+        if unbound:
+            logger.warning(
+                "Config script drives %s, which no pin in this config defines; "
+                "the functions using them will fail when called",
+                ", ".join(repr(name) for name in unbound),
+            )
+
     def parse_script(self):
         if self.full_config:
             initial_script = self.full_config["script"]
             new_script = initial_script
+
+            self._check_script_indentation(initial_script)
 
             # Some configs use command names that aren't valid Python
             # identifiers (e.g. "12vpoweroff" starts with a digit). The script
@@ -263,6 +300,22 @@ class Board(dict):
                     var_re = re.compile(rf"\${var_name}")
                     new_script = var_re.sub(variable["default_value"], new_script)
 
+            # A "$name" left over is a variable the script uses but the config
+            # never declares, so there is no value to substitute. Say which,
+            # rather than letting it reach exec() as a syntax error: the value
+            # is a board timing that only the config can supply.
+            undeclared = sorted(set(re.findall(r"\$(\w+)", new_script)))
+            if undeclared:
+                raise ConfigScriptError(
+                    "Config script uses undeclared variable(s) "
+                    + ", ".join(f"${name}" for name in undeclared)
+                    + "; the config declares "
+                    + (
+                        ", ".join(sorted(v["name"] for v in variables if v.get("name")))
+                        or "none"
+                    )
+                )
+
             # remove lines that start with // (// is a valid comment)
             new_script = "\n".join(
                 line
@@ -275,6 +328,11 @@ class Board(dict):
             new_script = fix_comments.sub("\r", new_script)
             fix_comments = re.compile(r"\/\/.*\r")
             new_script = fix_comments.sub("\r", new_script)
+
+            # Keep the script in its own language, with comments and variables
+            # already resolved, for the command check further down: everything
+            # below rewrites it into Python.
+            alpaca_script = new_script
 
             # fix function definitions
             fix_functions = re.compile(r"\(\)[\s]?", re.MULTILINE)
@@ -312,6 +370,8 @@ class Board(dict):
             # create pins
             self.create_pins()
 
+            self._check_script_commands(alpaca_script)
+
             # iterate keys explicitly: this is an exec'd namespace and the
             # `.keys()` form is load-bearing here (see config-parsing history)
             for name in d.keys():  # noqa: SIM118
@@ -328,27 +388,26 @@ class DummyBoard(Board):
         self.config_path = config_path
         self.usb_device = lambda: None
         self.usb_device.serial_number = "123456"
-        with open(self.config_path) as cf:
-            self.full_config = json.loads(cf.read())
+        self.full_config = tacconfig.convert_file(self.config_path)
         self.parse_script()
 
     def create_ports(self):
         logger.debug("creating ports")
-        if "FTDI" in self.config_path:
+        # The pinout config names the platform explicitly, so the port layout
+        # no longer has to be guessed from the file name.
+        platform_type = self.full_config.get("platform_type", "")
+        if platform_type in FTDI_PLATFORM_TYPES:
             for p in self.full_config.get("bus"):
                 bus_name = p.get("bus")
                 if p.get("bus_function") == 2:
                     self.ports.update({bus_name: DummyPort(bus_name, "123456")})
 
-        if "PSOC" in self.config_path:
+        if platform_type == "PSOC":
             self.ports.update({0: DummyPort("123456", None)})
 
     def create_pins(self):
         logger.debug("creating pins")
-        enabled_commands = self._enabled_pin_commands()
         for config in self.full_config.get("pins"):
-            if self._skip_disabled_pin(config, enabled_commands):
-                continue
             pin = DummyPin(self, config)
             pin.setPort(self.ports.get(0))
             logger.debug(f"Adding {pin.command}")
@@ -515,17 +574,9 @@ class FtdiBoard(Board):
     def __init__(self, usb_device, tac_config_path):
         Board.__init__(self)
         self.usb_device = usb_device
-        # Default config for FTDI Alpaca-Lite. "installconfigs" installs it as
-        # default.tcnf; the bundled package ships it as TAC_FTDI_13.tcnf.
-        conf = os.path.join(tac_config_path, DEFAULT_CONFIG_FILENAME)
-        if not os.path.exists(conf):
-            logger.warning(
-                "%s not found in %s; falling back to TAC_FTDI_13.tcnf. "
-                "Run 'pytactl installconfigs' to install the full config set.",
-                DEFAULT_CONFIG_FILENAME,
-                tac_config_path,
-            )
-            conf = os.path.join(tac_config_path, "TAC_FTDI_13.tcnf")
+        # Default config for FTDI Alpaca-Lite, used when the board's USB
+        # descriptor matches no catalog entry.
+        conf = default_config_file(tac_config_path)
         f = open(os.path.join(tac_config_path, "devicelist.json"))
         device_list = json.loads(f.read())
         f.close()
@@ -543,9 +594,7 @@ class FtdiBoard(Board):
             logger.error("No matching FTDI config found")
             sys.exit(1)
 
-        f = open(conf, "rb")
-        self.full_config = json.loads(f.read())
-        f.close()
+        self.full_config = tacconfig.convert_file(conf)
         self.parse_script()
 
     def create_ports(self):
@@ -557,10 +606,7 @@ class FtdiBoard(Board):
                 )
 
     def create_pins(self):
-        enabled_commands = self._enabled_pin_commands()
         for p in self.full_config.get("pins"):
-            if self._skip_disabled_pin(p, enabled_commands):
-                continue
             pin = FtdiPin(self, p)
             pin.setPort(self.ports.get(pin.bus))
             logger.debug(f"Adding {pin.command}")
@@ -591,9 +637,7 @@ class PsocBoard(Board):
             logger.error("No matching PSOC config found")
             sys.exit(1)
 
-        f = open(conf, "rb")
-        self.full_config = json.loads(f.read())
-        f.close()
+        self.full_config = tacconfig.convert_file(conf)
         self.parse_script()
         self.quick_methods.update({"devicePowerOn": QuickMethod(self, "devicePowerOn")})
         self.quick_methods.update(
@@ -673,10 +717,7 @@ class PsocBoard(Board):
         self.ports.update({0: PsocPort(self.usb_device.serial_number)})
 
     def create_pins(self):
-        enabled_commands = self._enabled_pin_commands()
         for config in self.full_config.get("pins"):
-            if self._skip_disabled_pin(config, enabled_commands):
-                continue
             pin = PsocPin(self, config)
             pin.setPort(self.ports.get(0))
             logger.debug(f"Adding {pin.command}")
@@ -743,19 +784,14 @@ class Pic32cxBoard(Board):
             )
             sys.exit(1)
 
-        f = open(conf, "rb")
-        self.full_config = json.loads(f.read())
-        f.close()
+        self.full_config = tacconfig.convert_file(conf)
         self.parse_script()
 
     def create_ports(self):
         self.ports.update({0: Pic32cxPort(self.usb_device.serial_number)})
 
     def create_pins(self):
-        enabled_commands = self._enabled_pin_commands()
         for config in self.full_config.get("pins"):
-            if self._skip_disabled_pin(config, enabled_commands):
-                continue
             pin = Pic32cxPin(self, config)
             pin.setPort(self.ports.get(0))
             logger.debug(f"Adding {pin.command}")

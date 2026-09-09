@@ -5,6 +5,84 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `pytactl convertconfigs <dir>` converts a directory of TAC config files into
+  the shared pinout format, in place or into `--output <dir>`, with `--dry-run`
+  and `--write-overlay`.
+- `pytactl.tacconfig`, the module behind that conversion: it splits a combined
+  config into the hardware pinout and the UI overlay, merges them back, and
+  loads a config file in any of the three shapes.
+- The full board config set is now added into `pytactl/tac_configs/` and ships
+  with the package, so FTDI, PSOC and PIC32CX boards can be driven straight
+  after install with no `installconfigs` step and no network access.
+  `pytactl/tac_configs/README.md` records the upstream commit it was taken from
+  and how to refresh it. `installconfigs` still pulls the current upstream set
+  when you want something newer than the snapshot, and what it installs keeps
+  taking precedence over the bundled set.
+- Converted configs are annotated with where they came from: a `source` object
+  naming the repository, the commit (resolved from the ref at import time, so
+  it does not move), the directory and the upstream file. `convertconfigs`
+  reads this from the git checkout it is pointed at and `installconfigs` from
+  the config repository, so a refresh re-stamps the set; an already annotated
+  config is left alone rather than restamped from wherever it now sits.
+- `convertconfigs --default-config <name>` sets the file that `devicelist.json`
+  entries with no config of their own point at, for a destination that holds
+  the FTDI Alpaca-Lite default under a name other than `default.pinout.json` -
+  as the bundled set does.
+
+### Fixed
+
+- `TAC_FTDI_51`, `TAC_FTDI_52` and `TAC_FTDI_77` now load. Each indents two
+  script lines with spaces where the config format calls for a tab, which made
+  the whole config unloadable. `installconfigs` and `convertconfigs` re-indent
+  scripts with tabs as they import them, logging each file they touch, so the
+  bundled set and anything imported through either command is clean.
+
+### Changed
+
+- pytactl now loads board configs from `*.pinout.json` - the hardware half of
+  the upstream config split - instead of the combined `.tcnf` files. The UI
+  half (tabs, buttons, labels, tooltips, grid cells) is no longer parsed at
+  all. A single config file passed with `--config-file-path` may still be a
+  legacy combined `.tcnf`, or the UI overlay of a split pair; both are
+  converted on load.
+- `pytactl installconfigs` converts what it downloads, so the installed config
+  set is `.pinout.json` files plus a `devicelist.json` whose `configPath`
+  entries point at them. It is no longer needed to drive a board, but a config
+  directory left by an earlier version holds `.tcnf` files that are no longer
+  found: re-run `installconfigs`, convert it in place with
+  `pytactl convertconfigs <dir>`, or delete it to fall back to the bundled set.
+- The default FTDI Alpaca-Lite config is `TAC_FTDI_13.pinout.json` in the
+  bundled set, and is installed by `installconfigs` as `default.pinout.json`
+  rather than `default.tcnf`. Either name is accepted wherever that config is
+  looked up, so a config directory does not have to carry both.
+- The port layout of a board driven from a single config file is derived from
+  the config's `platform_type` instead of being guessed from the file name, so
+  a config file may now be named anything.
+- A script that uses a variable the config never declares (`delay $edl` with no
+  `edl` in `variables`) now raises `ConfigScriptError` naming the variables and
+  what the config does declare, instead of reaching `exec()` as an opaque
+  `SyntaxError`. The value is a board timing only the config can supply, so
+  pytactl says so rather than guessing one.
+- A config script must indent statements with a single tab. The parser rejects
+  anything else with a `ConfigScriptError` naming the offending lines, instead
+  of accepting whatever whitespace is there: indentation is part of the config
+  file format, and a config that breaks it is one to fix. A raw upstream
+  `.tcnf` passed to `--config-file-path` may therefore be rejected where the
+  converted config loads - convert the directory first. A config directory
+  installed by an earlier version may need `installconfigs` re-running.
+- Loading a config warns when its script drives a command no pin defines,
+  naming the commands. Several upstream configs carry lines for hardware the
+  board does not have; that used to surface only as an `AttributeError` from
+  inside the script, typically when someone tried to power a board on.
+- The rule that a pin disabled in the UI gives way to an enabled pin sharing
+  its command name now lives in the conversion rather than in board loading.
+  `enabled` is a UI field and does not survive into the pinout file, so the
+  decision is made once, up front; the resulting pin set is unchanged.
+
 ## [2.0] - 2026-08-21
 
 The first release published to [PyPI](https://pypi.org/project/pytactl/). This

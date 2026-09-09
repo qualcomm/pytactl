@@ -7,7 +7,13 @@ import logging
 import sys
 from argparse import ArgumentParser
 
-from . import DEFAULT_CONFIG_REPOSITORY, __version__, default_tac_config_path
+from . import (
+    BUNDLED_DEFAULT_CONFIG_FILENAME,
+    DEFAULT_CONFIG_FILENAME,
+    DEFAULT_CONFIG_REPOSITORY,
+    __version__,
+    default_tac_config_path,
+)
 
 logger = logging.getLogger()
 
@@ -46,10 +52,10 @@ def build_parser():
     common.add_argument(
         "--tac-config-path",
         default=default_tac_config_path(),
-        help="Path to directory with TAC configs (devicelist.json + .tcnf "
-        "files). Required for FTDI/PSOC boards; Bughopper boards need no configs. "
-        "Defaults to the configs installed by 'installconfigs', else those "
-        "bundled with the package.",
+        help="Path to directory with TAC configs (devicelist.json + "
+        ".pinout.json files). Defaults to the configs installed by "
+        "'installconfigs', else those bundled with the package, which cover "
+        "every board upstream ships a config for.",
     )
 
     subparsers = parser.add_subparsers(dest="mode", required=True, metavar="COMMAND")
@@ -65,7 +71,9 @@ def build_parser():
     )
     shell.add_argument(
         "--config-file-path",
-        help="Path to a single config file; use for debugging the config file syntax.",
+        help="Path to a single config file (.pinout.json, or a .tcnf in either "
+        "the split or the legacy combined format); use for debugging the config "
+        "file syntax.",
     )
 
     oneshot = subparsers.add_parser(
@@ -79,14 +87,16 @@ def build_parser():
     )
     oneshot.add_argument(
         "--config-file-path",
-        help="Path to a single config file; use for debugging the config file syntax.",
+        help="Path to a single config file (.pinout.json, or a .tcnf in either "
+        "the split or the legacy combined format); use for debugging the config "
+        "file syntax.",
     )
 
     installconfigs = subparsers.add_parser(
         "installconfigs",
         parents=[base],
-        help="Download TAC config files (.tcnf + devicelist.json) from the "
-        "config repository",
+        help="Download TAC config files from the config repository and convert "
+        "them to the shared pinout format",
     )
     installconfigs.add_argument(
         "--config-repository",
@@ -107,6 +117,58 @@ def build_parser():
         "--repository-path",
         default="configurations",
         help="Path within the repository holding the configs (default: %(default)s)",
+    )
+    installconfigs.add_argument(
+        "--no-annotate",
+        action="store_true",
+        help="Do not record the repository, ref and commit the configs were "
+        "imported from in each converted config",
+    )
+
+    convertconfigs = subparsers.add_parser(
+        "convertconfigs",
+        parents=[base],
+        help="Convert a directory of TAC config files to the shared pinout "
+        "format (.pinout.json)",
+    )
+    convertconfigs.add_argument(
+        "source",
+        help="Directory holding the TAC config files to convert (e.g. the "
+        "'configurations' directory of a qcom-test-automation-controller "
+        "checkout)",
+    )
+    convertconfigs.add_argument(
+        "--output",
+        help="Directory to write the converted configs into (default: convert "
+        "in place)",
+    )
+    convertconfigs.add_argument(
+        "--write-overlay",
+        action="store_true",
+        help="Also write the slim UI overlay (.tcnf) beside each .pinout.json, "
+        "producing the complete two-file layout instead of only the half "
+        "pytactl needs",
+    )
+    convertconfigs.add_argument(
+        "--default-config",
+        default=DEFAULT_CONFIG_FILENAME,
+        help="File name that devicelist.json entries with no config of their "
+        "own should point at (default: %(default)s). The config set bundled "
+        "with pytactl keeps the FTDI Alpaca-Lite default under its own name "
+        f"rather than a copy, so refreshing it passes {BUNDLED_DEFAULT_CONFIG_FILENAME} here.",
+    )
+    convertconfigs.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what would be converted without writing anything",
+    )
+    convertconfigs.add_argument(
+        "--no-annotate",
+        action="store_true",
+        help="Do not record the repository and commit of the source checkout in "
+        "each converted config. Annotated configs carry an extra 'source' key, "
+        "which upstream's pinout schema does not allow; use this for configs "
+        "that must validate against it unchanged",
     )
 
     service = subparsers.add_parser(
@@ -191,6 +253,18 @@ def main(argv=None):
             args.local_path,
             args.ref,
             args.repository_path,
+            not args.no_annotate,
+        )
+    elif args.mode == "convertconfigs":
+        from .installconfigs import convert_configs
+
+        convert_configs(
+            args.source,
+            args.output,
+            args.write_overlay,
+            args.dry_run,
+            not args.no_annotate,
+            args.default_config,
         )
     elif args.mode == "service":
         if not args.serial:

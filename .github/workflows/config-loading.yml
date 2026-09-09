@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 # Fetches the board configuration files from the upstream
-# qcom-test-automation-controller repository and runs the pytactl test suite
-# against them, verifying that every upstream config loads through
+# qcom-test-automation-controller repository, converts them to the shared pinout
+# format (see pytactl/tacconfig.py) and runs the pytactl test suite against
+# them, verifying that every upstream config converts and then loads through
 # Board.create_board() and exposes the required quick methods.
 #
-# The configs under test come purely from upstream; nothing in this repo's
-# (untracked) tac_configs/ is used. A failure here therefore means an upstream
-# config no longer loads cleanly.
+# The configs under test come purely from upstream: "installconfigs" writes them
+# to the per-user data directory, which the suite prefers over the set vendored
+# in pytactl/tac_configs/. A failure here therefore means an upstream config no
+# longer loads cleanly, and that the vendored snapshot should not be refreshed
+# from it as-is. The vendored set is covered by the regular test run.
 name: Config loading
 
 on:

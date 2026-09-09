@@ -129,7 +129,7 @@ def test_bughopper_v2_hid_writes_prefix_report_id(patch_usb_find, monkeypatch):
 
 
 # Required quick methods the PIC32CX config script defines and the test invokes.
-PIC32CX_CONFIG = "TAC_PIC32CXAuto_54.tcnf"
+PIC32CX_CONFIG = "TAC_PIC32CXAuto_54.pinout.json"
 PIC32CX_METHODS = ("powerOn", "powerOff", "bootToEDL")
 
 
@@ -145,7 +145,7 @@ def _prepare_pic32cx_config_dir(tmp_path, usb_descriptor):
         "catalog": [
             {
                 "usb_descriptor": usb_descriptor,
-                "configPath": f"tac_configs/{PIC32CX_CONFIG}",
+                "configPath": PIC32CX_CONFIG,
             }
         ]
     }

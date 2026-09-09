@@ -1,0 +1,55 @@
+# Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Runs the pytactl host-side checks in a container on a LAVA dispatcher.
+#
+# pytactl is host software: it drives a debug board over USB from the worker,
+# and the device dictionaries in this lab call it for powerOn/powerOff/
+# bootToEDL. So the test action runs in a container on the dispatcher rather
+# than on the DUT.
+#
+# NOTE: a LAVA docker test shell gets no /dev/bus/usb and no /dev/tty*, so the
+# container cannot open the debug board - `docker: privileged/volumes` keys are
+# accepted by the job schema but not honoured by the dispatcher (verified in
+# job 406714). The checks therefore cover everything up to the USB boundary and
+# report the worker's attached boards read-only from sysfs. Driving a board from
+# the container needs USB passthrough in the dispatcher's docker test shell.
+#
+# First green run: job 406746 on qcs8300-ride-01 (nuc-worker-19) - 30 test cases
+# passed, unit suite 285 passed / 1 skipped / 25 xfailed against the config set
+# installed from the wheel.
+#
+# Submit with:
+#   lavacli jobs submit lava/pytactl-host-job.yaml
+
+job_name: pytactl-host-checks
+device_type: monaco-ride
+priority: low
+visibility: personal
+tags:
+  - cambridge-lab
+
+timeouts:
+  job:
+    minutes: 30
+  action:
+    minutes: 25
+  connection:
+    minutes: 5
+
+metadata:
+  source: https://github.com/mwasilew/pytac
+  branch: pinout-config-format
+
+actions:
+  - test:
+      docker:
+        image: python:3.11-slim
+      timeout:
+        minutes: 25
+      definitions:
+        - repository: https://github.com/mwasilew/pytac.git
+          from: git
+          branch: pinout-config-format
+          path: lava/pytactl-host-tests.yaml
+          name: pytactl-host

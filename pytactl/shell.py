@@ -5,7 +5,7 @@ import logging
 import sys
 from cmd import Cmd
 
-from .debugboard import Board
+from .debugboard import Board, ConfigScriptError
 
 logger = logging.getLogger()
 
@@ -37,10 +37,16 @@ class AlpacaCmd(Cmd):
 
 def _create_board(serial, config_file_path, tac_config_path):
     board = None
-    if serial:
-        board = Board.create_board(serial, tac_config_path)
-    if config_file_path:
-        board = Board.create_from_config(config_file_path)
+    try:
+        if serial:
+            board = Board.create_board(serial, tac_config_path)
+        if config_file_path:
+            board = Board.create_from_config(config_file_path)
+    except ConfigScriptError as error:
+        # A defect in the config file itself, which the message describes and
+        # the user can act on. A traceback would only bury it.
+        logger.error("%s", error)
+        sys.exit(1)
 
     if board is None:
         logger.error(f"Failed to create board with serial {serial}, board not found")

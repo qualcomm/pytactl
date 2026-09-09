@@ -66,18 +66,33 @@ Then make sure your user is in the `plugdev` group (log out and back in after):
 **Bughopper boards (V1 and V2) work out of the box.** They are self-describing and need no
 config files.
 
-**All other debug boards (FTDI, PSOC) require configuration files** that are NOT shipped with
-pytactl. The easiest way to obtain them is the `installconfigs` subcommand, which downloads every
-`.tcnf` file and `devicelist.json` from the
+**All other debug boards (FTDI, PSOC, PIC32CX) are driven from a configuration file, and
+the configs ship with pytactl.** They live in `pytactl/tac_configs/`, vendored from
 [qcom-test-automation-controller](https://github.com/qualcomm/qcom-test-automation-controller/tree/main/configurations)
-project:
+and converted to the pinout format pytactl loads (see
+[Config file format](#config-file-format) below). Nothing needs fetching before a board can be
+driven:
+
+    pytactl shell --serial <serial>
+
+`pytactl/tac_configs/README.md` records the upstream commit the set was taken from.
+
+## Using a different config set
+
+`--tac-config-path <dir>` points pytactl at another directory of configs; without it, the
+bundled set is used, unless a config set has been installed with `installconfigs` — that one
+takes precedence.
+
+To pull the current upstream configs rather than the vendored snapshot, use the
+`installconfigs` subcommand. It downloads every config file and `devicelist.json` from the
+config repository, converts them, and installs the result into a per-user data directory
+(resolved with [platformdirs](https://pypi.org/project/platformdirs/), e.g.
+`~/.local/share/pytactl` on Linux):
 
     pytactl installconfigs
 
-With no arguments it fetches from the default config repository and installs into a per-user
-data directory (resolved with [platformdirs](https://pypi.org/project/platformdirs/), e.g.
-`~/.local/share/pytactl` on Linux). Once that directory is populated, the board subcommands use it
-automatically as the default `--tac-config-path`. Override either with:
+Once that directory is populated, the board subcommands use it automatically. Override the
+source and destination with:
 
     pytactl installconfigs \
       --config-repository https://github.com/qualcomm/qcom-test-automation-controller/ \
@@ -88,24 +103,121 @@ automatically as the default `--tac-config-path`. Override either with:
 `--ref` selects the git ref (branch, tag, or commit; default `HEAD`) and `--repository-path` the
 directory within the repository to fetch from (default `configurations`).
 
-`installconfigs` also copies the default FTDI Alpaca-Lite config (which has no upstream `.tcnf`
-file) in as `default.tcnf` and rewrites empty `configPath` entries in `devicelist.json` to point
-at it.
+`installconfigs` also copies the default FTDI Alpaca-Lite config (which has no upstream config
+file) in as `default.pinout.json` and rewrites empty `configPath` entries in `devicelist.json` to
+point at it.
 
-You can also copy the `configurations/` directory by hand and point pytactl at it with
-`--tac-config-path <dir>`.
+You can also convert a `configurations/` directory you already have — a checkout of
+qcom-test-automation-controller, say — and point pytactl at the result:
+
+    pytactl convertconfigs /path/to/qcom-test-automation-controller/configurations \
+      --output /path/to/install
+    pytactl shell --tac-config-path /path/to/install --serial <serial>
+
+Without `--output` the configs are converted in place, beside the originals. `--dry-run` reports
+what would be written without writing it, and `--write-overlay` also writes the UI half of each
+config (see below), producing the complete two-file layout rather than only the half pytactl uses.
 
 Note: some configs in qcom-test-automation-controller currently have syntax issues; pick the
 ones that match your board.
 
-`devicelist.json` maps board hardware IDs to their `.tcnf` config files, and must be present in
-the `--tac-config-path` directory for FTDI/PSOC boards. Example entry for a PSOC board:
+## Config file format
+
+Upstream stores one config file per debug board. Historically that was a single combined `.tcnf`
+file holding the hardware pinout, the automation script *and* the Qt UI layout (tabs, buttons,
+labels, tooltips, grid cells).
+[PR #54](https://github.com/qualcomm/qcom-test-automation-controller/pull/54) splits that into
+two sibling files, so the hardware description can be reused outside the QTAC application:
+
+| File | Contents |
+|------|----------|
+| `TAC_<CHIP>_<ID>.pinout.json` | Pins, bus map, script variables and the Alpaca script. Self-describing: `"format": "tac-pinout"`. |
+| `TAC_<CHIP>_<ID>.tcnf` | UI layout only, linked to its pinout file through `pinout_ref`. |
+
+pytactl drives hardware and has no UI, so it loads the `.pinout.json` half and ignores the
+overlay. `pytactl.tacconfig` implements the same split (it reproduces upstream's own output for
+every config in that PR), which is what `installconfigs` and `convertconfigs` apply, so pytactl
+does not have to wait for the split to land upstream and will consume upstream's `.pinout.json`
+files unchanged once it does.
+
+All three shapes are accepted wherever a single config file is given with `--config-file-path`: a
+`.pinout.json`, a split `.tcnf` (its `pinout_ref` sibling is loaded from the same directory), or a
+legacy combined `.tcnf`, which is converted in memory.
+
+One thing does not survive the split unaided: `enabled` is a UI field, but several configs wire
+the same command name to two physical pins and disable one of them. The conversion therefore
+drops a disabled pin when an enabled pin claims the same command, so the command keeps driving the
+line it drove before.
+
+### Script indentation
+
+A config's `script` is written in the "Alpaca" automation language: a `def` at column 0
+and its body **indented with a single tab**, with no nested blocks.
+
+    def powerOn()
+    →   battery 1
+    →   delay 800
+    →   pkey 0
+
+pytactl requires that tab. A statement indented with spaces — or with more than one tab —
+is rejected at load time with a `ConfigScriptError` naming the offending lines, rather
+than being quietly accepted: indentation is part of the config file format, and a config
+that does not follow it is a config to fix, not to work around.
+
+`installconfigs` and `convertconfigs` re-indent scripts with tabs as they import them and
+log each file they touch, so configs that come through either command satisfy the rule and
+the set bundled with pytactl already does. Three upstream configs (`TAC_FTDI_51`,
+`TAC_FTDI_52`, `TAC_FTDI_77`) indent two lines each with spaces and are corrected on the
+way in.
+
+This means a **raw** upstream `.tcnf` handed straight to `--config-file-path` may be
+rejected where the converted config loads. That is deliberate — convert the directory
+first:
+
+    pytactl convertconfigs /path/to/qcom-test-automation-controller/configurations \
+      --output /path/to/install
+
+If you are upgrading and a board that used to work now reports a `ConfigScriptError`, your
+installed config directory predates this rule: re-run `pytactl installconfigs`, or
+`pytactl convertconfigs <dir>` to normalise it in place.
+
+### Provenance annotation
+
+`installconfigs` and `convertconfigs` stamp each config they write with where it came from, in a
+`source` object below the format envelope — the repository, the commit (a ref like `main` moves,
+so the SHA it resolved to at import time is what gets recorded), the directory within the
+repository, and the upstream file name:
+
+    {
+      "$schema": "https://qualcomm.github.io/tac/schemas/pinout-1.0.json",
+      "format": "tac-pinout",
+      "schema_version": "1.0",
+      "source": {
+        "repository": "https://github.com/qualcomm/qcom-test-automation-controller.git",
+        "commit": "757cc972c88e4a1098881b2bc73f3d53eac286be",
+        "path": "configurations",
+        "file": "TAC_FTDI_15.tcnf"
+      },
+      ...
+    }
+
+`convertconfigs` reads this from the git checkout it is pointed at, and leaves an already
+annotated config alone, so re-converting an imported set in place does not restamp it with the
+wrong repository.
+
+This is pytactl's one addition to the format: upstream's `schemas/pinout-1.0.json` sets
+`"additionalProperties": false`, so an annotated config does not validate against it unchanged.
+Pass `--no-annotate` to either subcommand for configs that must.
+
+`devicelist.json` maps board hardware IDs to their config files, and must be present in
+the `--tac-config-path` directory for FTDI/PSOC boards. `installconfigs` and `convertconfigs`
+rewrite its `configPath` entries to the converted file names. Example entry for a PSOC board:
 
     {
       "catalog": [
         {
           "platform_id": 17,
-          "configPath": "tac_configs/TAC_PSOC_17.tcnf"
+          "configPath": "TAC_PSOC_17.pinout.json"
         }
       ]
     }
@@ -140,7 +252,7 @@ Start the interactive shell with the `shell` subcommand:
 
 Optional arguments:
 
-    --tac-config-path <dir>   # path to config directory (required for FTDI/PSOC boards, see Configuration)
+    --tac-config-path <dir>   # use a config directory other than the bundled one (see Configuration)
     --log-level DEBUG         # log verbosity (default: DEBUG)
 
 Once started, the shell prompt accepts commands generated from your board's config script. The available commands depend on the config — not all boards define every command (e.g. newer configs may omit `powerOn`/`powerOff`). Typical commands:

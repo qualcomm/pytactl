@@ -20,6 +20,7 @@ from conftest import (
     config_params,
     discover_configs,
     load_board,
+    requires_bundled_configs,
     requires_configs,
 )
 
@@ -36,7 +37,7 @@ def test_configs_exist():
     Skipped outright when the external config set is unavailable (e.g. a distro
     build environment); see ``resolve_config_dir`` in conftest.py.
     """
-    assert discover_configs(), "no testable .tcnf config files found"
+    assert discover_configs(), "no testable .pinout.json config files found"
 
 
 @pytest.mark.parametrize("config_path", config_params(XFAIL_LOAD))
@@ -118,8 +119,8 @@ def test_ftdi_falls_back_to_default_config(
     prepared_configs, patch_usb_find, monkeypatch
 ):
     """An FTDI device whose product string matches no catalog entry falls back
-    to the default.tcnf config (the bundled FTDI Alpaca-Lite config, platform_id
-    13, that 'installconfigs' installs under that name)."""
+    to the default.pinout.json config (the bundled FTDI Alpaca-Lite config,
+    platform_id 13, that 'installconfigs' installs under that name)."""
     from conftest import FTDI_PRODUCT, FTDI_VENDOR, make_usb_device
 
     from pytactl import debugboard
@@ -131,6 +132,29 @@ def test_ftdi_falls_back_to_default_config(
     patch_usb_find(device)
 
     board = debugboard.Board.create_board("UNKNOWN_SERIAL", config_dir)
+
+    assert isinstance(board, debugboard.FtdiBoard)
+    assert board.full_config["platform_id"] == 13
+
+
+@requires_bundled_configs
+def test_ftdi_falls_back_to_the_bundled_default(patch_usb_find):
+    """The same fallback works against the config set shipped with the package,
+    where that config keeps its own name instead of being copied to
+    default.pinout.json."""
+    from conftest import FTDI_PRODUCT, FTDI_VENDOR, make_usb_device
+
+    import pytactl
+    from pytactl import debugboard
+
+    device = make_usb_device(
+        FTDI_VENDOR, FTDI_PRODUCT, "UNKNOWN_SERIAL", product_str="No Such Descriptor"
+    )
+    patch_usb_find(device)
+
+    board = debugboard.Board.create_board(
+        "UNKNOWN_SERIAL", pytactl.PACKAGE_TAC_CONFIG_PATH
+    )
 
     assert isinstance(board, debugboard.FtdiBoard)
     assert board.full_config["platform_id"] == 13
