@@ -42,7 +42,7 @@ sudo dnf install -y hidapi
 
 By default, USB devices are not accessible without root. Create a udev rule for your board:
 
-    echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9302", MODE="0666", GROUP="plugdev"' \
+    echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9302", MODE="0666", GROUP="plugdev", TAG+="uaccess"' \
       | sudo tee /etc/udev/rules.d/99-alpaca.rules
     sudo udevadm control --reload-rules && sudo udevadm trigger
 
