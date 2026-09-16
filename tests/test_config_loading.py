@@ -1,10 +1,13 @@
 # Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Tests that every config file can be loaded through the USB-description based
-dispatch in ``pytactl.debugboard`` (the same path used by ``pytactl.shell`` and
+"""Tests that every config file can be loaded through the device dispatch in
+``pytactl.debugboard`` (the same path used by ``pytactl.shell`` and
 ``pytactl.service``) and exposes the required quick methods: powerOn, powerOff,
 bootToEDL.
+
+Each config is loaded through the dispatch its own platform uses - FtdiBoard,
+PsocBoard or Pic32cxBoard - as selected by ``conftest.dispatch_for``.
 
 Special-cased configs (excluded boards, known-broken configs, configs that omit
 a function or reference a disabled pin) are declared centrally in conftest.py.
@@ -22,6 +25,17 @@ from conftest import (
     load_board,
     requires_configs,
 )
+
+from pytactl import debugboard
+
+# The board class each dispatch is expected to produce, so a config routed to
+# the wrong path fails loudly instead of loading through a class that happens to
+# tolerate its contents.
+DISPATCH_BOARD_CLASS = {
+    "FTDI": debugboard.FtdiBoard,
+    "PSOC": debugboard.PsocBoard,
+    "PIC32CX": debugboard.Pic32cxBoard,
+}
 
 # Functions that every config script is expected to define (unless explicitly
 # documented otherwise in XFAIL_REQUIRED).
@@ -43,13 +57,15 @@ def test_configs_exist():
 def test_config_loads_via_usb_dispatch(
     config_path, prepared_configs, patch_usb_find, monkeypatch
 ):
-    """Each config loads cleanly when its matching USB device is plugged in."""
+    """Each config loads cleanly when its matching device is plugged in."""
     config_dir, entries = prepared_configs
     entry = entries[os.path.basename(config_path)]
 
     board = load_board(config_path, config_dir, entries, patch_usb_find, monkeypatch)
 
     assert board is not None
+    # Dispatch routed the config to the board class that drives its platform.
+    assert isinstance(board, DISPATCH_BOARD_CLASS[entry.dispatch])
     # The board was built from the config we asked for.
     assert board.full_config["platform_type"] == entry.platform_type
 
