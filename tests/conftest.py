@@ -11,7 +11,7 @@ code path that ``pytactl.shell`` and ``pytactl.service`` use:
 A handful of configs are deliberately handled specially (see the maps below):
 
 * EXCLUDED_CONFIGS   - not driven by the config-script path at all, so the suite
-                       does not try to load them through FtdiBoard/PsocBoard.
+                       does not try to load them through a board class.
 * XFAIL_LOAD         - configs that currently fail to parse/exec. Left unchanged
                        on purpose; tracked as expected failures.
 * XFAIL_REQUIRED     - configs that load fine but legitimately omit one or more
@@ -92,10 +92,6 @@ QCOM_PRODUCT = debugboard.Board.ID_PRODUCT_QCOM  # 0x9302
 # Configs that are not loaded through the config-script path and so are not part
 # of the data-driven config tests.
 EXCLUDED_CONFIGS = {
-    # PIC32CX uses a third dispatch path (udev detection + serial-prefix config
-    # matching) rather than the FTDI/PSOC USB-descriptor path the data-driven
-    # tests model. Covered directly by test_create_board_dispatches_pic32cx.
-    "TAC_PIC32CXAuto_54.tcnf": "PIC32CXAuto uses a dedicated dispatch path",
     # Bughopper board: handled by BughopperV1Board/BughopperV2Board (driven over
     # USB control / HID transfers), not by a config script.
     "TAC_FTDI_80.tcnf": "Bughopper board, handled by a dedicated board class",
@@ -135,14 +131,31 @@ XFAIL_EXECUTE = {
 
 
 # Describes how to make Board.create_board() load a particular config file:
-# which USB device to fake and which match key to advertise in devicelist.json.
-#   platform_type: the value declared inside the .tcnf (FTDI, PSOC, ...)
-#   dispatch:      which board class create_board() routes to, "FTDI" or "PSOC".
-#                  debugboard only knows two config-matching mechanisms:
-#                  FtdiBoard matches by usb_descriptor, PsocBoard by platform_id.
+# which device to fake and which match key to advertise in devicelist.json.
+#   platform_type: the value declared inside the .tcnf (FTDI, PSOC, PIC32CXAuto)
+#   dispatch:      which board class create_board() routes to: "FTDI", "PSOC" or
+#                  "PIC32CX". debugboard knows three config-matching mechanisms:
+#                  FtdiBoard matches by usb_descriptor against the USB product
+#                  string, PsocBoard by platform_id read over serial, and
+#                  Pic32cxBoard by usb_descriptor against the serial-number
+#                  prefix (the board is invisible to libusb; see dispatch_for).
 ConfigEntry = namedtuple(
     "ConfigEntry", ["name", "path", "platform_type", "dispatch", "match_value"]
 )
+
+
+def dispatch_for(platform_type):
+    """Return the board class create_board() routes a config's platform to.
+
+    Keyed on ``platform_type`` rather than on filenames, so a config newly added
+    upstream is checked through the path its own board class actually uses
+    instead of falling into the FTDI default and failing to load.
+    """
+    if platform_type == "PSOC":
+        return "PSOC"
+    if platform_type.startswith("PIC32CX"):
+        return "PIC32CX"
+    return "FTDI"
 
 
 def discover_configs():
@@ -276,10 +289,11 @@ def prepared_configs(tmp_path_factory):
         base = os.path.basename(path)
         with open(path) as handle:
             cfg = json.load(handle)
-        platform_type = cfg.get("platform_type")
+        platform_type = cfg.get("platform_type", "")
         shutil.copy(path, os.path.join(dst, base))
+        dispatch = dispatch_for(platform_type)
 
-        if platform_type == "PSOC":
+        if dispatch == "PSOC":
             # PsocBoard matches catalog["platform_id"] against the board id read
             # over serial; assign a unique synthetic id we can return from the
             # mocked __get_board_id.
@@ -288,6 +302,17 @@ def prepared_configs(tmp_path_factory):
                 {"platform_id": platform_id, "configPath": f"tac_configs/{base}"}
             )
             entries[base] = ConfigEntry(base, path, platform_type, "PSOC", platform_id)
+        elif dispatch == "PIC32CX":
+            # Pic32cxBoard matches catalog["usb_descriptor"] against the part of
+            # the serial number before "XX", so the descriptor must contain no
+            # "XX" of its own: number them instead of naming them after the file.
+            descriptor = f"PYTACTL{len(entries)}"
+            catalog.append(
+                {"usb_descriptor": descriptor, "configPath": f"tac_configs/{base}"}
+            )
+            entries[base] = ConfigEntry(
+                base, path, platform_type, "PIC32CX", descriptor
+            )
         else:
             # FTDI (and any other FTDI-USB board): FtdiBoard matches
             # catalog["usb_descriptor"] against device.product. Use a unique
@@ -305,8 +330,12 @@ def prepared_configs(tmp_path_factory):
 
 
 def load_board(config_path, config_dir, entries, patch_usb_find, monkeypatch):
-    """Load the board for ``config_path`` through Board.create_board, mocking the
-    USB device so the config-by-USB-description dispatch selects this config."""
+    """Load the board for ``config_path`` through Board.create_board, faking the
+    device discovery so that dispatch selects this config.
+
+    Each platform is loaded the way its own board class discovers a board: by
+    USB product string (FTDI), by board id read over serial (PSOC), or by
+    serial-number prefix after udev detection (PIC32CX)."""
     entry = entries[os.path.basename(config_path)]
 
     if entry.dispatch == "FTDI":
@@ -327,5 +356,16 @@ def load_board(config_path, config_dir, entries, patch_usb_find, monkeypatch):
             lambda self: entry.match_value,
         )
         return debugboard.Board.create_board("PSOC_SERIAL", config_dir)
+
+    if entry.dispatch == "PIC32CX":
+        # The PIC32CX board is invisible to libusb: create_board finds no USB
+        # device and falls through to the udev-based Pic32cxBoard.detect(), which
+        # would enumerate real serial ports. Force it, and pass a serial number
+        # whose prefix before "XX" is the descriptor registered for this config.
+        patch_usb_find(None)
+        monkeypatch.setattr(
+            debugboard.Pic32cxBoard, "detect", staticmethod(lambda serial: True)
+        )
+        return debugboard.Board.create_board(f"{entry.match_value}XX01", config_dir)
 
     raise AssertionError(f"unsupported dispatch {entry.dispatch!r}")
