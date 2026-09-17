@@ -1,0 +1,8 @@
+# alpaca
+SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9302", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+
+# bughopper v1
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# bughopper v2
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="b001", MODE="0660", GROUP="plugdev", TAG+="uaccess"
