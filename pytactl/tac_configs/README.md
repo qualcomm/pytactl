@@ -10,7 +10,7 @@ top-level README).
 |---|---|
 | Source | `https://github.com/qualcomm/qcom-test-automation-controller` |
 | Directory | `configurations/` |
-| Commit | `757cc972c88e4a1098881b2bc73f3d53eac286be` (`main`, 2026-08-21) |
+| Commit | per file, in its `source` annotation (initial import: `757cc972c88e4a1098881b2bc73f3d53eac286be`, `main`, 2026-08-21) |
 | Licence | BSD-3-Clause, the same as pytactl |
 
 Each config records that provenance itself, in a `source` object right below the
@@ -45,30 +45,34 @@ indent two lines each with spaces and are corrected on the way in. If a refresh
 reports re-indentation for a config not on that list, it is worth raising
 upstream.
 
-## Refreshing
+## Syncing with upstream
 
-To pull a newer upstream config set into this directory:
+The *Upstream config sync* workflow (`.github/workflows/upstream-config-sync.yml`)
+runs weekly, on Mondays. It converts the upstream configs and compares them
+with this directory file by file, ignoring the `source` annotation, and opens a
+pull request (from the `upstream-config-sync` branch) applying whatever changed.
+Each file it updates is stamped with the upstream commit it now comes from, so
+the configs here need not all name the same commit.
+
+Upstream changes that should stay out of pytactl are listed in
+`scripts/known-config-differences.json`, each with a fingerprint of the upstream
+file it was reviewed against. A listed difference does not trigger a pull
+request until upstream changes that file again. The same comparison runs
+locally:
 
 ```sh
-git clone --depth 1 https://github.com/qualcomm/qcom-test-automation-controller /tmp/qtac
-pytactl convertconfigs /tmp/qtac/configurations \
-  --output pytactl/tac_configs \
-  --default-config TAC_FTDI_13.pinout.json
+git clone https://github.com/qualcomm/qcom-test-automation-controller.git /tmp/qtac
+python scripts/sync_upstream_configs.py /tmp/qtac           # report; exit 1 if anything new
+python scripts/sync_upstream_configs.py /tmp/qtac --apply   # take the new differences
+python scripts/sync_upstream_configs.py /tmp/qtac --update-known  # hold back all current ones
 ```
 
-`convertconfigs` reads the repository and commit out of the checkout it is given
-and stamps them into every config it writes, so the annotations follow the
-refresh. `--default-config` is what keeps `devicelist.json` pointing at
-`TAC_FTDI_13.pinout.json` rather than at a `default.pinout.json` that only an
-`installconfigs` directory has.
+To hold back a difference the workflow has proposed, revert that file on the
+pull request branch, run `--update-known` and push the updated
+known-differences file (add a `note` to the entry saying why).
 
-`TAC_FTDI_13.pinout.json` is not in the upstream set, so it survives the refresh
-untouched — including its annotation, which then still names the previous
-commit. Re-stamp it by hand if the generated default has changed.
-
-Afterwards, update the commit recorded above, re-run the test suite (it covers
-every config in here, and checks that they all name one upstream commit and that
-it is the one in this file) and review the diff.
+`TAC_FTDI_13.pinout.json` is not in the upstream set and is never compared or
+touched; re-stamp it by hand if the generated default changes.
 
 Do not edit these files by hand: fixes belong upstream, or they are lost at the
 next refresh.

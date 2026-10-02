@@ -15,7 +15,6 @@ its own: dropping pins that a same-named enabled pin shadows.
 import glob
 import json
 import os
-import pathlib
 import subprocess
 
 import pytest
@@ -849,9 +848,9 @@ def test_bundled_config_set_is_all_pinout_files():
 @requires_bundled_configs
 def test_bundled_configs_record_the_upstream_commit():
     """Every vendored config says which qcom-test-automation-controller commit
-    it was imported from, and they all name the same one - a set assembled from
-    two different revisions is an import that went wrong."""
-    commits = set()
+    it was imported from. Configs are synced from upstream file by file (see
+    scripts/sync_upstream_configs.py), so they need not all name the same one;
+    each must name a full commit SHA, though, not a ref that moves."""
     for path in glob.glob(
         os.path.join(pytactl.PACKAGE_TAC_CONFIG_PATH, "*" + tacconfig.PINOUT_EXTENSION)
     ):
@@ -859,15 +858,8 @@ def test_bundled_configs_record_the_upstream_commit():
             source = json.load(handle).get(tacconfig.SOURCE_FIELD)
         assert source, f"{os.path.basename(path)} is not annotated"
         assert "qcom-test-automation-controller" in source["repository"], path
-        commits.add(source["commit"])
-
-    assert len(commits) == 1, f"mixed upstream revisions: {sorted(commits)}"
-    commit = commits.pop()
-    assert len(commit) == 40 and all(c in "0123456789abcdef" for c in commit)
-
-    # The directory's own README quotes the same commit, so the two cannot drift.
-    readme = pathlib.Path(pytactl.PACKAGE_TAC_CONFIG_PATH, "README.md").read_text()
-    assert commit in readme
+        commit = source["commit"]
+        assert len(commit) == 40 and all(c in "0123456789abcdef" for c in commit), path
 
 
 @requires_bundled_configs

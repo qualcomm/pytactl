@@ -1,0 +1,95 @@
+# Copyright (c) 2026 Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Compares the TAC configs vendored in pytactl/tac_configs/ with the upstream
+# qcom-test-automation-controller repository, converted to the shared pinout
+# format, and proposes a pull request when upstream has changed.
+#
+# Differences listed in scripts/known-config-differences.json are upstream
+# changes deliberately not taken; they do not trigger a pull request for as long
+# as upstream still matches the fingerprint recorded for them. Everything else
+# that differs is applied file by file (see scripts/sync_upstream_configs.py).
+#
+# Nothing is proposed when the test suite fails against the synced configs.
+#
+# The pull request is opened from a fixed branch, so a later run with further
+# upstream changes updates the open one instead of opening another.
+name: Upstream config sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, on Mondays.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-config-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pytactl
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Check out qcom-test-automation-controller
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: qualcomm/qcom-test-automation-controller
+          path: upstream
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11"
+
+      - name: Install pytactl
+        run: |
+          python -m pip install --upgrade pip
+          # Editable, so the tests below load the synced configs from the tree.
+          pip install -e .[dev]
+
+      - name: Compare and apply new upstream differences
+        id: sync
+        run: |
+          python scripts/sync_upstream_configs.py upstream --apply \
+            --summary "$RUNNER_TEMP/summary.md"
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "commit=$(git -C upstream rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+          # The upstream checkout is not part of the change.
+          rm -rf upstream
+
+      # A failure fails the job, so no pull request is proposed for configs the
+      # suite rejects; the run itself is the report.
+      - name: Run the test suite against the synced configs
+        run: |
+          if [ -z "$(git status --porcelain -- pytactl/tac_configs scripts/known-config-differences.json)" ]; then
+            echo "No changes; skipping."
+            exit 0
+          fi
+          python -m pytest -q
+
+      - name: Propose a pull request
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        with:
+          # Pull requests opened with the default GITHUB_TOKEN do not trigger
+          # other workflows; set CONFIG_SYNC_TOKEN to a PAT for CI to run on them.
+          token: ${{ secrets.CONFIG_SYNC_TOKEN || github.token }}
+          branch: upstream-config-sync
+          delete-branch: true
+          title: "Sync TAC configs with upstream ${{ steps.sync.outputs.commit }}"
+          commit-message: |
+            Sync TAC configs with upstream ${{ steps.sync.outputs.commit }}
+
+            Apply the upstream qcom-test-automation-controller config changes
+            not listed in scripts/known-config-differences.json.
+          signoff: true
+          body-path: ${{ runner.temp }}/summary.md
+          add-paths: |
+            pytactl/tac_configs
+            scripts/known-config-differences.json
