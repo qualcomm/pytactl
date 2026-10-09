@@ -18,7 +18,14 @@ from pytactl import debugboard
 Board = debugboard.Board
 
 # Quick methods that the directly-driven (script-less) boards hard-code.
-BUGHOPPER_METHODS = ("powerOn", "powerOff", "bootToEDL", "reset", "forceUsbcHostMode")
+BUGHOPPER_METHODS = (
+    "powerOn",
+    "powerOff",
+    "bootToEDL",
+    "reset",
+    "forceUsbcHostMode",
+    "wakeUp",
+)
 
 
 def test_create_board_returns_none_when_no_device(patch_usb_find, monkeypatch):
@@ -199,3 +206,45 @@ def test_create_board_pic32cx_no_matching_config_exits(
 
     with pytest.raises(SystemExit):
         Board.create_board("UNKNOWNXX01", config_dir)
+
+
+def test_bughopper_v2_wake_up_pulses_vol_down(patch_usb_find, monkeypatch):
+    """wakeUp asserts and releases VOL_DOWN only, leaving the other lines alone."""
+    device = make_usb_device(
+        Board.ID_VENDOR_BUGHOPPER_V2, Board.ID_PRODUCT_BUGHOPPER_V2, "S7"
+    )
+    patch_usb_find(device)
+
+    hid_device = MagicMock(name="hid_device")
+    hid_device.serial = "S7"
+    fake_hid = types.ModuleType("hid")
+    fake_hid.Device = MagicMock(return_value=hid_device)
+
+    monkeypatch.setitem(sys.modules, "hid", fake_hid)
+    monkeypatch.setattr(debugboard, "hid", fake_hid, raising=False)
+    monkeypatch.setattr(debugboard, "sleep", lambda s: None)
+
+    board = Board.create_board("S7", "./tac_configs")
+    board.wakeUp()
+
+    writes = [call.args[0] for call in hid_device.write.call_args_list]
+    vol_down = board.VOL_DOWN_BIT
+    assert writes == [
+        bytes([0x00, board.CMD_GPIO, vol_down, vol_down]),
+        bytes([0x00, board.CMD_GPIO, 0x00, vol_down]),
+    ]
+
+
+def test_bughopper_v1_wake_up_pulses_vol_down(patch_usb_find, monkeypatch):
+    """wakeUp asserts and releases VOL_DOWN, keeping power enabled throughout."""
+    device = make_usb_device(Board.ID_VENDOR_FTDI, Board.ID_PRODUCT_BUGHOPPER_V1, "S8")
+    patch_usb_find(device)
+    monkeypatch.setattr(debugboard, "sleep", lambda s: None)
+
+    board = Board.create_board("S8", "./tac_configs")
+    bitmodes = []
+    monkeypatch.setattr(board, "_ftdi_set_bitmode", bitmodes.append)
+    board.wakeUp()
+
+    masks = board.POWER_DISABLE_MASK | board.EDL_MASK | board.VOL_DOWN_MASK
+    assert bitmodes == [masks | board.VOL_DOWN_BIT, masks]

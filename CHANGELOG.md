@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Bughopper V1 and V2 boards have a `wakeUp` quick method that pulses
+  VOL_DOWN for 300 ms to wake the target from suspend. The JCTL header carries
+  no power key, and VOL_DOWN is a wakeup source on the Arduino UNO Q.
+
 ## [3.1] - 2026-10-05
 
 ### Added

@@ -29,6 +29,10 @@ except ImportError as e:
 
 # wait time for other GPIOs to be truly set before touching the reset GPIO
 PRE_RESET_DELAY = 0.1
+# How long the Bughopper holds VOL_DOWN asserted to wake the target from
+# suspend. VOL_DOWN is a gpio-keys wakeup source on the UNO Q; JCTL carries no
+# power key, so this is the closest stand-in for a power button press.
+WAKE_PULSE_DELAY = 0.3
 
 BITMODE_CBUS = 0x20
 
@@ -427,6 +431,7 @@ class BughopperV1Board(Board):
         self.quick_methods.update(
             {"forceUsbcHostMode": QuickMethod(self, "forceUsbcHostMode")}
         )
+        self.quick_methods.update({"wakeUp": QuickMethod(self, "wakeUp")})
 
         self.EDL_BIT = 0b00000001
         self.POWER_DISABLE_BIT = 0b00000100
@@ -470,6 +475,19 @@ class BughopperV1Board(Board):
         logger.debug("MPU poweroff")
         self._ftdi_set_bitmode(self.POWER_DISABLE_MASK | self.POWER_DISABLE_BIT)
 
+    def wakeUp(self):
+        logger.debug("VOL_DOWN pulse to wake from suspend")
+        self._ftdi_set_bitmode(
+            self.POWER_DISABLE_MASK
+            | self.EDL_MASK
+            | self.VOL_DOWN_MASK
+            | self.VOL_DOWN_BIT
+        )
+        sleep(WAKE_PULSE_DELAY)
+        self._ftdi_set_bitmode(
+            self.POWER_DISABLE_MASK | self.EDL_MASK | self.VOL_DOWN_MASK
+        )
+
     def forceUsbcHostMode(self):
         logger.debug("Forcing host mode")
         self._ftdi_set_bitmode(
@@ -499,6 +517,7 @@ class BughopperV2Board(Board):
         self.quick_methods.update(
             {"forceUsbcHostMode": QuickMethod(self, "forceUsbcHostMode")}
         )
+        self.quick_methods.update({"wakeUp": QuickMethod(self, "wakeUp")})
 
         self.CMD_GPIO = 0x1
 
@@ -554,6 +573,12 @@ class BughopperV2Board(Board):
         self._hid_set_bitmode(
             self.CMD_GPIO, self.POWER_DISABLE_BIT, self.POWER_DISABLE_BIT
         )
+
+    def wakeUp(self):
+        logger.debug("VOL_DOWN pulse to wake from suspend")
+        self._hid_set_bitmode(self.CMD_GPIO, self.VOL_DOWN_BIT, self.VOL_DOWN_BIT)
+        sleep(WAKE_PULSE_DELAY)
+        self._hid_set_bitmode(self.CMD_GPIO, 0x0, self.VOL_DOWN_BIT)
 
     def forceUsbcHostMode(self):
         logger.debug("Forcing host mode")
