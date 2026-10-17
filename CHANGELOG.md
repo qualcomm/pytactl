@@ -29,8 +29,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   set. Use `convertconfigs` with `--tac-config-path` for a config set of your
   own, and delete the installed directory to go back to the bundled configs.
 
+### Changed
+
+- The `60-pytactl.rules` udev rule for PSoC Alpaca boards (`05c6:9302`) uses
+  mode `0660` instead of `0666`, like the other rules: access is granted to
+  the `plugdev` group and, through `uaccess`, to the local session user,
+  rather than to every user on the system.
+
 ### Fixed
 
+- `60-pytactl.rules` grants access to FTDI-based debug boards (`0403:6011`):
+  Alpaca-Lite, RIDE MX 4.0 Lite, RIDE MICRO 4.0, Hamoa Lite and TDP535 JTAG
+  mux. Without it they could only be driven as root.
 - The test suite no longer needs git. The two tests that read a real git
   checkout skip when git is not installed, and the provenance tests that only
   need a checkout's description stub it instead, so they run everywhere

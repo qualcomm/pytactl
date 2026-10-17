@@ -1,5 +1,20 @@
 # alpaca
-SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9302", MODE="0666", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="05c6", ATTR{idProduct}=="9302", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# alpaca lite (FTDI FT4232H)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6011", ATTR{product}=="ALPACA-LITE*", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# RIDE MX 4.0 Lite (FTDI FT4232H)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6011", ATTR{product}=="RIDE MX 4.0 Lite", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# RIDE MICRO 4.0 (FTDI FT4232H)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6011", ATTR{product}=="RIDE MICRO 4.0", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# Hamoa Lite (FTDI FT4232H)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6011", ATTR{product}=="Hamoa Lite", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# TDP535 JTAG mux (FTDI FT4232H)
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6011", ATTR{product}=="TDP535_JTAG_MUX_DC", MODE="0660", GROUP="plugdev", TAG+="uaccess"
 
 # bughopper v1
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", MODE="0660", GROUP="plugdev", TAG+="uaccess"
