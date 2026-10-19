@@ -60,7 +60,7 @@
             "description": "Alpaca V3.1",
             "name": "Alpaca V3.1",
             "platform_id": 7,
-            "revision": 0,
+            "revision": 1,
             "usb_descriptor": ""
         },
         {
@@ -140,7 +140,7 @@
             "description": "CSM - Lite",
             "name": "CSM Lite",
             "platform_id": 15,
-            "revision": 0,
+            "revision": 1,
             "usb_descriptor": "ALPACA-LITE CSM DEBUG BOARD"
         },
         {
@@ -227,7 +227,7 @@
             "description": "FTDI-LITE SDX75 QMP",
             "name": "SDX75 QMP",
             "platform_id": 22,
-            "revision": 0,
+            "revision": 1,
             "usb_descriptor": "ALPACA-LITE SDX75 QMP"
         },
         {
@@ -767,6 +767,24 @@
             "usb_descriptor": "ALPACA-LITE MAILI CDP"
         },
         {
+            "configPath": "TAC_FTDI_13.pinout.json",
+            "debugBoardType": 5,
+            "description": "Arduino BugHopper V1 (Default)",
+            "name": "Arduino BugHopper V1 (Default)",
+            "platform_id": 80,
+            "revision": 0,
+            "usb_descriptor": ""
+        },
+        {
+            "configPath": "TAC_PIC32CXAuto_81.pinout.json",
+            "debugBoardType": 4,
+            "description": "Seca CoB STAR",
+            "name": "Seca CoB STAR",
+            "platform_id": 81,
+            "revision": 2,
+            "usb_descriptor": "TORO"
+        },
+        {
             "configPath": "TAC_PSOC_82.pinout.json",
             "debugBoardType": 2,
             "description": "SHIKRA PSOC",
@@ -774,7 +792,34 @@
             "platform_id": 82,
             "revision": 38,
             "usb_descriptor": ""
+        },
+        {
+            "configPath": "TAC_PIC32CXAuto_85.pinout.json",
+            "debugBoardType": 4,
+            "description": "IQ10 RRD V1",
+            "name": "IQ10 RRD V1",
+            "platform_id": 85,
+            "revision": 1,
+            "usb_descriptor": "IQ10rrd"
+        },
+        {
+            "configPath": "TAC_PSOC_87.pinout.json",
+            "debugBoardType": 2,
+            "description": "HAWI QRD PSOC",
+            "name": "HAWI QRD",
+            "platform_id": 87,
+            "revision": 7,
+            "usb_descriptor": ""
+        },
+        {
+            "configPath": "TAC_FTDI_13.pinout.json",
+            "debugBoardType": 6,
+            "description": "Arduino BugHopper V2 (Default)",
+            "name": "Arduino BugHopper V2 (Default)",
+            "platform_id": 95,
+            "revision": 0,
+            "usb_descriptor": ""
         }
     ],
-    "modification_date": "Tue Jun 16 23:24:37 2026"
+    "modification_date": "Wed Oct 7 01:49:31 2026"
 }
