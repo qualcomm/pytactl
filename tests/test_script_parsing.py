@@ -140,6 +140,33 @@ def test_declared_variables_are_substituted(tmp_path):
     board.bootToEDL()
 
 
+def test_variable_sharing_a_prefix_is_not_clobbered(tmp_path):
+    """Substituting $edl must not also rewrite the start of $edl_long, whatever
+    order the config declares them in."""
+    for variables in (
+        [
+            {"name": "edl", "default_value": "1300"},
+            {"name": "edl_long", "default_value": "5000"},
+        ],
+        [
+            {"name": "edl_long", "default_value": "5000"},
+            {"name": "edl", "default_value": "1300"},
+        ],
+    ):
+        path = write_config(
+            tmp_path,
+            "def bootToEDL()\n\tdelay $edl\n\tdelay $edl_long\n",
+            variables=variables,
+        )
+
+        board = debugboard.Board.create_from_config(path)
+        delays = []
+        board.delay = delays.append
+        board.bootToEDL()
+
+        assert delays == [1300, 5000]
+
+
 def test_undeclared_variable_is_reported_by_name(tmp_path):
     """TAC_FTDI_72 drives $edl/$uefi/$fastboot but declares no variables. There
     is nothing to substitute and the delay is a board timing only the config can
