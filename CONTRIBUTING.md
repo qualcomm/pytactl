@@ -30,7 +30,7 @@ In general, contributors should develop on branches based off of `main` and pull
     ```
 
 1. Make your changes, add tests, and make sure the tests still pass.
-1. Commit your changes using the [DCO](https://developercertificate.org/). You can attest to the DCO by commiting with the **-s** or **--signoff** options or manually adding the "Signed-off-by":
+1. Commit your changes using the [DCO](https://developercertificate.org/) with a known identity (sorry, no anonymous contributions). You can attest to the DCO by commiting with the **-s** or **--signoff** options or manually adding the "Signed-off-by":
 
     ```bash
     git commit -s -m "Really useful commit message"`
