@@ -64,6 +64,11 @@ class QuickMethodView(Resource):
         return {}
 
     def put(self, boardid, name):
+        # name comes from the URL: only dispatch to registered quick methods,
+        # never to arbitrary Board attributes.
+        if name not in get_board(boardid).quick_methods:
+            raise NotFound(f"unknown quick method {name}")
+
         def job(b):
             try:
                 getattr(b, name)()
@@ -94,6 +99,10 @@ class CommandView(Resource):
         value = args.get("value")
         if value is None:
             raise BadRequest("insufficient parameters")
+        # name comes from the URL: only dispatch to registered commands,
+        # never to arbitrary Board attributes.
+        if name not in get_board(boardid).commands:
+            raise NotFound(f"unknown command {name}")
 
         def job(b):
             try:
