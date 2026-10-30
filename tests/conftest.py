@@ -167,7 +167,6 @@ XFAIL_EXECUTE = {
         "voldn/volup, board only has VC1-VC3"
     ),
     "TAC_FTDI_56.pinout.json": "drives usb1; board only defines usb0",
-    "TAC_FTDI_65.pinout.json": "drives sedl/usb1; board defines neither",
     "TAC_FTDI_67.pinout.json": (
         "drives sedl/usb1, and sumxs2 which looks like a typo for the board's smuxs2"
     ),
