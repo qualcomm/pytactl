@@ -7,7 +7,7 @@ import logging
 
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, NotFound
 from werkzeug.serving import run_simple
 
 from .debugboard import Board, TACException
@@ -22,6 +22,13 @@ rparser = reqparse.RequestParser()
 rparser.add_argument(
     "value", type=int, help="1 for setting pin HIGH, 0 for setting pin LOW"
 )
+
+
+def get_board(boardid):
+    b = boards.get(boardid)
+    if b is None:
+        raise NotFound(f"unknown board {boardid}")
+    return b
 
 
 class BoardView(Resource):
@@ -42,12 +49,11 @@ class QuickMethodView(Resource):
         return {}
 
     def put(self, boardid, name):
-        b = boards.get(boardid, {})
-        if b:
-            try:
-                getattr(b, name)()
-            except Exception:
-                raise TACException
+        b = get_board(boardid)
+        try:
+            getattr(b, name)()
+        except Exception:
+            raise TACException
         return b.pins
 
 
@@ -71,14 +77,13 @@ class CommandView(Resource):
         value = args.get("value")
         if value is None:
             raise BadRequest("insufficient parameters")
-        b = boards.get(boardid, {})
-        if b:
-            try:
-                c = getattr(b, name)
-                if c:
-                    c(value)
-            except Exception:
-                raise TACException
+        b = get_board(boardid)
+        try:
+            c = getattr(b, name)
+            if c:
+                c(value)
+        except Exception:
+            raise TACException
         return b.pins
 
 
@@ -102,11 +107,12 @@ class PinView(Resource):
         value = args.get("value")
         if value is None:
             raise BadRequest("insufficient parameters")
-        b = boards.get(boardid, {})
-        if b:
-            p = b.pins.get(pinid)
-            p.set(value)
-        return b.pins.get(pinid)
+        b = get_board(boardid)
+        p = b.pins.get(pinid)
+        if p is None:
+            raise NotFound(f"unknown pin {pinid}")
+        p.set(value)
+        return p
 
 
 class PinList(Resource):
