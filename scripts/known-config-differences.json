@@ -16,6 +16,11 @@
             "fingerprint": "sha256:e1d03cd8f5b7d0b53f94c58013bfebd63af11800dae1d988da3b1a783d5f400a",
             "upstream_commit": "03cddde77c5c72ef2b0753683e8ad4f8fc5ce6f8"
         },
+        "TAC_PSOC_7.pinout.json": {
+            "note": "pytactl holds pedl for 10 s more in bootToEDL. Upstream releases it with the power key, 2.2 s after power is applied; an RB3Gen2 cut off while running can take over 7 s to power on (PON by SYSOK after a UVLO), so it samples pedl released and boots from storage instead of EDL.",
+            "fingerprint": "sha256:b406559366adb697e2f0dd3651d7847bf79e28ba5d9b86653fb8f601f1dbf212",
+            "upstream_commit": "5260b251751adac25ad87b2bce363a8e9d516bb5"
+        },
         "TAC_PSOC_82.pinout.json": {
             "note": "Upstream 98aa34e adds firmware version 19 to supportedFirmwareVer.",
             "fingerprint": "sha256:feb877c76490f7088133f9cd04f02e46f24271fea728fd44fb502a4b0bc4ea5f",
