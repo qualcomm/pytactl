@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
@@ -17,6 +18,9 @@ api = Api(app)
 
 logger = logging.getLogger()
 boards = {}
+# One single-worker executor per board: requests for the same board are
+# executed one at a time in FIFO order, different boards run in parallel.
+executors = {}
 
 rparser = reqparse.RequestParser()
 rparser.add_argument(
@@ -29,6 +33,17 @@ def get_board(boardid):
     if b is None:
         raise NotFound(f"unknown board {boardid}")
     return b
+
+
+def run_on_board(boardid, fn):
+    b = get_board(boardid)
+    return executors[boardid].submit(fn, b).result()
+
+
+def snapshot_pins(b):
+    # Copy while still on the board worker so the response isn't mutated by
+    # the next queued request during serialization.
+    return {k: dict(v) for k, v in b.pins.items()}
 
 
 class BoardView(Resource):
@@ -49,12 +64,14 @@ class QuickMethodView(Resource):
         return {}
 
     def put(self, boardid, name):
-        b = get_board(boardid)
-        try:
-            getattr(b, name)()
-        except Exception:
-            raise TACException
-        return b.pins
+        def job(b):
+            try:
+                getattr(b, name)()
+            except Exception:
+                raise TACException
+            return snapshot_pins(b)
+
+        return run_on_board(boardid, job)
 
 
 class QuickMethodList(Resource):
@@ -77,14 +94,17 @@ class CommandView(Resource):
         value = args.get("value")
         if value is None:
             raise BadRequest("insufficient parameters")
-        b = get_board(boardid)
-        try:
-            c = getattr(b, name)
-            if c:
-                c(value)
-        except Exception:
-            raise TACException
-        return b.pins
+
+        def job(b):
+            try:
+                c = getattr(b, name)
+                if c:
+                    c(value)
+            except Exception:
+                raise TACException
+            return snapshot_pins(b)
+
+        return run_on_board(boardid, job)
 
 
 class CommandList(Resource):
@@ -107,12 +127,15 @@ class PinView(Resource):
         value = args.get("value")
         if value is None:
             raise BadRequest("insufficient parameters")
-        b = get_board(boardid)
-        p = b.pins.get(pinid)
-        if p is None:
-            raise NotFound(f"unknown pin {pinid}")
-        p.set(value)
-        return p
+
+        def job(b):
+            p = b.pins.get(pinid)
+            if p is None:
+                raise NotFound(f"unknown pin {pinid}")
+            p.set(value)
+            return dict(p)
+
+        return run_on_board(boardid, job)
 
 
 class PinList(Resource):
@@ -154,5 +177,8 @@ api.add_resource(CommandList, "/<boardid>/command")
 def run_service(serials, tac_config_path, hostname="0.0.0.0", port=5000):
     for serial in serials:
         boards.update({serial: Board.create_board(serial, tac_config_path)})
+        executors[serial] = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix=f"board-{serial}"
+        )
 
-    run_simple(hostname, port, app)
+    run_simple(hostname, port, app, threaded=True)
