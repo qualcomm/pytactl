@@ -296,13 +296,20 @@ class Board(dict):
                 new_script = name_re.sub(new_name, new_script)
 
             # replace variables with actual values
+            # Match each "$name" only as a whole token: without the trailing
+            # (?!\w), substituting "$edl" would also rewrite the start of
+            # "$edl_long". The value is passed through a function so that it is
+            # inserted literally rather than parsed as a replacement template.
             variables = self.full_config.get("variables", [])
             for variable in variables:
                 # create global variables
                 var_name = variable.get("name")
                 if var_name:
-                    var_re = re.compile(rf"\${var_name}")
-                    new_script = var_re.sub(variable["default_value"], new_script)
+                    var_re = re.compile(rf"\${re.escape(var_name)}(?!\w)")
+                    value = str(variable["default_value"])
+                    new_script = var_re.sub(
+                        lambda _match, value=value: value, new_script
+                    )
 
             # A "$name" left over is a variable the script uses but the config
             # never declares, so there is no value to substitute. Say which,
