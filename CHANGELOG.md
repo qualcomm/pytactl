@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- The release workflow uses `pypa/gh-action-pypi-publish` v1.14.3, fixing
+  [GHSA-5xjx-3w67-w9x9](https://github.com/advisories/GHSA-5xjx-3w67-w9x9):
+  earlier versions trust a revoked CA in the chain Sigstore uses for Trusted
+  Publishing and digital attestations.
+
 ## [3.2] - 2026-10-19
 
 ### Added
