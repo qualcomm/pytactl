@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Dependabot checks the GitHub Actions and Python dependencies weekly and
+  proposes updates once a release is at least seven days old.
+
 ### Security
 
 - The release workflow uses `pypa/gh-action-pypi-publish` v1.14.3, fixing
