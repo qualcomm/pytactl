@@ -48,7 +48,9 @@ def build_parser():
     common.add_argument(
         "--serial",
         nargs="+",
-        help="Debug board serial number(s)",
+        help="Debug board serial number(s). service requires at least one and "
+        "drives each board given; the other commands use the first, or the only "
+        "connected board when omitted.",
     )
     # Where to load the TAC configs from.
     config_path = ArgumentParser(add_help=False)

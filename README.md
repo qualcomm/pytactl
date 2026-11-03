@@ -246,6 +246,10 @@ Or using `lsusb` (replace `VID:PID` with `0403:6011` for FTDI or `05c6:9302` for
 
     lsusb -v -d VID:PID | grep iSerial
 
+When exactly one debug board is connected, `shell` and `oneshot` use it and `--serial` can be
+left out. With no board or several connected they exit with an error, listing the serial
+numbers of the connected boards to choose from. Given several serials, they use the first.
+
 # Using as a shell
 
 Start the interactive shell with the `shell` subcommand:
