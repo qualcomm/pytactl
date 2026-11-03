@@ -54,6 +54,17 @@ def _create_board(serial, config_file_path, tac_config_path):
     return board
 
 
+def list_commands(serial=None, config_file_path=None, tac_config_path=None):
+    board = _create_board(serial, config_file_path, tac_config_path)
+
+    print("Commands:")
+    for name in sorted(board.quick_methods):
+        print(f"  {name}")
+    print("Pin commands (take 1 to assert, 0 to deassert):")
+    for name in sorted(board.commands):
+        print(f"  {name}")
+
+
 def run_oneshot(
     command, serial=None, config_file_path=None, tac_config_path=None, value=None
 ):

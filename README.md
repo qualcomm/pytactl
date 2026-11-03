@@ -246,9 +246,9 @@ Or using `lsusb` (replace `VID:PID` with `0403:6011` for FTDI or `05c6:9302` for
 
     lsusb -v -d VID:PID | grep iSerial
 
-When exactly one debug board is connected, `shell` and `oneshot` use it and `--serial` can be
-left out. With no board or several connected they exit with an error, listing the serial
-numbers of the connected boards to choose from. Given several serials, they use the first.
+When exactly one debug board is connected, `shell`, `oneshot` and `listcommands` use it and
+`--serial` can be left out. With no board or several connected they exit with an error,
+listing the serial numbers of the connected boards to choose from. Given several serials, they use the first.
 
 # Using as a shell
 
@@ -303,6 +303,15 @@ GPIO pin commands take an integer value (`1` to assert, `0` to deassert):
 
 The same commands available in the shell can be used here. An unknown command exits with an
 error listing the commands supported by your board.
+
+To list the commands supported by your board without running one:
+
+    pytactl listcommands --serial <ID_SERIAL_SHORT>
+
+The board must be connected, as its type is read over USB. To list the commands of a config
+file without a board, pass it instead:
+
+    pytactl listcommands --config-file-path <path/to/config.pinout.json>
 
 # Using as a service
 
