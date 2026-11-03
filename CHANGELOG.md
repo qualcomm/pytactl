@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Dependabot checks the GitHub Actions and Python dependencies weekly and
+  proposes updates once a release is at least seven days old.
+
 ## [3.3] - 2026-11-11
 
 ### Changed
