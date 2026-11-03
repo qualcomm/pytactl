@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependabot checks the GitHub Actions and Python dependencies weekly and
   proposes updates once a release is at least seven days old.
 
+### Changed
+
+- When no board matches `--serial`, the error now says the board may be
+  connected but not accessible and points to the USB permissions section of
+  the README. pyusb skips devices it cannot open, so a permissions problem
+  used to be reported only as "board not found".
+
 ## [3.3] - 2026-11-11
 
 ### Changed

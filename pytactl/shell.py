@@ -49,7 +49,13 @@ def _create_board(serial, config_file_path, tac_config_path):
         sys.exit(1)
 
     if board is None:
-        logger.error(f"Failed to create board with serial {serial}, board not found")
+        # pyusb skips devices whose serial number it cannot read, so a board
+        # the user has no permission to open looks the same as a missing one.
+        logger.error(
+            f"Failed to create board with serial {serial}: board not found or "
+            "not accessible. If it is connected, check the USB permissions "
+            "(udev rules and plugdev group) described in the README"
+        )
         sys.exit(1)
     return board
 
