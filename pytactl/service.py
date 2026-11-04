@@ -6,14 +6,27 @@
 import logging
 
 from flask import Flask
-from flask_restful import Api, Resource, reqparse
+from flask_restx import Api as RestxApi
+from flask_restx import Resource, reqparse
 from werkzeug.exceptions import BadRequest
 from werkzeug.serving import run_simple
 
 from .debugboard import Board, TACException
 
+
+class Api(RestxApi):
+    """ flask-restx Api without the Swagger UI or its root route
+
+    flask-restx normally registers its own endpoint at "/" which would conflict with BoardList
+    This keeps "/" free, as in Flask-RESTful
+    """
+
+    def _register_doc(self, app_or_blueprint):
+        pass
+
+
 app = Flask(__name__)
-api = Api(app)
+api = Api(app, doc=False)
 
 logger = logging.getLogger()
 boards = {}
