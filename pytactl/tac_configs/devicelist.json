@@ -801,7 +801,16 @@
             "platform_id": 87,
             "revision": 7,
             "usb_descriptor": ""
+        },
+        {
+            "configPath": "TAC_PIC32CXAuto_54.pinout.json",
+            "debugBoardType": 4,
+            "description": "NordAu RIDE (KARUSSELL V2 debug board)",
+            "name": "NordAu RIDE V2",
+            "platform_id": 97,
+            "revision": 6,
+            "usb_descriptor": "KARUSSELLV2"
         }
     ],
-    "modification_date": "Wed Oct 7 01:49:31 2026"
+    "modification_date": "Thu Nov 6 00:00:00 2026"
 }
