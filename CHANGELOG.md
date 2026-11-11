@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3] - 2026-11-11
+
+### Changed
+
+- The service serves requests concurrently. The werkzeug server runs with
+  `threaded=True` and each board has a single-worker executor, so operations
+  on different boards run in parallel while requests for the same board run
+  one at a time in FIFO order. This keeps a long quick method (such as
+  `bootToEDL`) on one board from blocking every other board, and keeps
+  read-modify-write of FTDI port state and multi-step config scripts from
+  interleaving on one board. `GET` status queries stay responsive while a
+  script is running ([#44](https://github.com/qualcomm/pytactl/pull/44)).
+
+### Fixed
+
+- The service only dispatches registered quick methods and commands. The
+  method name from the URL is no longer passed straight to `getattr()` on the
+  board, so a client can no longer invoke arbitrary `Board` attributes (such
+  as `create_pins` or `__init__`); unknown names return 404.
+- `PUT` on an unknown board or pin returns 404 instead of failing with a 500.
+- Script variables are substituted as whole tokens. When a config declares two
+  variables where one name is a prefix of the other (for example `edl` and
+  `edl_long`), substituting `$edl` no longer rewrites the start of `$edl_long`,
+  which previously left a broken script that failed with a `NameError`.
+- `TAC_FTDI_65` (Hawi MTP) no longer drives an undefined `usb1` pin in its
+  power script, which made every power and EDL operation fail with an error
+  ([#42](https://github.com/qualcomm/pytactl/pull/42)).
+- `TAC_PSOC_7` holds `pedl` longer in `bootToEDL` so the target reliably
+  enters EDL mode ([#43](https://github.com/qualcomm/pytactl/pull/43)).
+
+### Security
+
+- The `pypa/gh-action-pypi-publish` workflow action is bumped to v1.14.3 to
+  fix a vulnerability.
+
 ## [3.2] - 2026-10-19
 
 ### Added
