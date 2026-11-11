@@ -5,7 +5,7 @@ import os
 
 import platformdirs
 
-__version__ = "3.2.0"
+__version__ = "3.3.0"
 
 # Configs bundled with the package: a .pinout.json per board plus
 # devicelist.json, synced from upstream with the fixes pytactl needs.
