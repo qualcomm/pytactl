@@ -807,7 +807,7 @@
             "debugBoardType": 4,
             "description": "NordAu RIDE (KARUSSELL V2 debug board)",
             "name": "NordAu RIDE V2",
-            "platform_id": 97,
+            "platform_id": 54,
             "revision": 6,
             "usb_descriptor": "KARUSSELLV2"
         }
