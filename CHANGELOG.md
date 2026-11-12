@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the README. pyusb skips devices it cannot open, so a permissions problem
   used to be reported only as "board not found".
 
+### Fixed
+
+- The service answers a failed quick method or command with the error in the
+  500 response's `message`, instead of a bare "Internal Server Error".
+
 ## [3.3] - 2026-11-11
 
 ### Changed

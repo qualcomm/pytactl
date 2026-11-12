@@ -7,10 +7,10 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Flask
 from flask_restx import Api as RestxApi
 from flask_restx import Resource, reqparse
-from werkzeug.exceptions import BadRequest, NotFound
+from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 from werkzeug.serving import run_simple
 
-from .debugboard import Board, TACException
+from .debugboard import Board
 
 
 class Api(RestxApi):
@@ -55,6 +55,12 @@ def run_on_board(boardid, fn):
     return executors[boardid].submit(fn, b).result()
 
 
+def raise_failure(boardid, name, error):
+    # Answer with what went wrong rather than a bare 500, so a client can
+    # report why the board did not respond. flask-restful logs the traceback.
+    raise InternalServerError(f"{boardid}: {name} failed: {error}") from error
+
+
 def snapshot_pins(b):
     # Copy while still on the board worker so the response isn't mutated by
     # the next queued request during serialization.
@@ -87,8 +93,8 @@ class QuickMethodView(Resource):
         def job(b):
             try:
                 getattr(b, name)()
-            except Exception:
-                raise TACException
+            except Exception as e:
+                raise_failure(boardid, name, e)
             return snapshot_pins(b)
 
         return run_on_board(boardid, job)
@@ -124,8 +130,8 @@ class CommandView(Resource):
                 c = getattr(b, name)
                 if c:
                     c(value)
-            except Exception:
-                raise TACException
+            except Exception as e:
+                raise_failure(boardid, name, e)
             return snapshot_pins(b)
 
         return run_on_board(boardid, job)
