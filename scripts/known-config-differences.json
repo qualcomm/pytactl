@@ -11,6 +11,11 @@
             "fingerprint": "sha256:a9aa06107d7debbc51f00d24c40d6530328b3ff316c2c4aece2abb605ac8de5a",
             "upstream_commit": "03cddde77c5c72ef2b0753683e8ad4f8fc5ce6f8"
         },
+        "TAC_FTDI_77.pinout.json": {
+            "note": "Upstream 9caf84f drops powerOff (with powerOnTheDevice and powerOffTheDevice), which pytactl requires, adds BootOutEDL, drives an sedl pin the config does not define and shortens the reset delay from 20000 to 17000 ms. pytactl keeps the previous version.",
+            "fingerprint": "sha256:49ea180c9d09c5f2733ddddd4ad24084b0c92852f299d76ff2525b636c61796a",
+            "upstream_commit": "dea44b10c90e79af86b6a433ef0f41c198585721"
+        },
         "TAC_PSOC_35.pinout.json": {
             "note": "pytactl 8f2c5eb shortens powerDelay from 18000 to 2000 ms; the upstream value makes RB1 reboot after it has started booting.",
             "fingerprint": "sha256:e1d03cd8f5b7d0b53f94c58013bfebd63af11800dae1d988da3b1a783d5f400a",
