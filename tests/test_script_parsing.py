@@ -261,3 +261,16 @@ def test_cli_reports_a_config_defect_without_a_traceback(tmp_path, caplog):
     assert excinfo.value.code == 1
     assert "single tab" in caplog.text
     assert "convertconfigs" in caplog.text
+
+
+def test_cli_lists_the_board_commands(tmp_path, capsys):
+    from pytactl.cli import main
+
+    path = write_config(tmp_path, TAB)
+
+    main(["listcommands", "--config-file-path", path])
+
+    out = capsys.readouterr().out
+    assert "  powerOn\n" in out
+    assert "  battery\n" in out
+    assert "  pkey\n" in out

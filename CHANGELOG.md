@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Dependabot checks the GitHub Actions and Python dependencies weekly and
   proposes updates once a release is at least seven days old.
+- A `listcommands` subcommand lists the commands a debug board supports: the
+  quick methods from its config script and its pin commands.
 
 ### Changed
 

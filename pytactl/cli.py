@@ -48,7 +48,9 @@ def build_parser():
     common.add_argument(
         "--serial",
         nargs="+",
-        help="Debug board serial number(s)",
+        help="Debug board serial number(s). service requires at least one and "
+        "drives each board given; the other commands use the first, or the only "
+        "connected board when omitted.",
     )
     # Where to load the TAC configs from.
     config_path = ArgumentParser(add_help=False)
@@ -94,6 +96,17 @@ def build_parser():
         help="Path to a single config file (.pinout.json, or a .tcnf in either "
         "the split or the legacy combined format); use for debugging the config "
         "file syntax.",
+    )
+
+    listcommands = subparsers.add_parser(
+        "listcommands",
+        parents=[base, common, config_path],
+        help="List the commands supported by a debug board",
+    )
+    listcommands.add_argument(
+        "--config-file-path",
+        help="Path to a single config file (.pinout.json, or a .tcnf in either "
+        "the split or the legacy combined format) to list the commands of",
     )
 
     subparsers.add_parser(
@@ -356,6 +369,11 @@ def main(argv=None):
         from .service import run_service
 
         run_service(args.serial, args.tac_config_path, args.hostname, args.port)
+    elif args.mode == "listcommands":
+        from .shell import list_commands
+
+        serial = _resolve_serial(args, parser, "listcommands")
+        list_commands(serial, args.config_file_path, args.tac_config_path)
     elif args.mode == "oneshot":
         from .shell import run_oneshot
 
