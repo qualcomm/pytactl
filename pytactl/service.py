@@ -14,7 +14,7 @@ from .debugboard import Board, TACException
 
 
 class Api(RestxApi):
-    """ flask-restx Api without the Swagger UI or its root route
+    """flask-restx Api without the Swagger UI or its root route
 
     flask-restx normally registers its own endpoint at "/" which would conflict with BoardList
     This keeps "/" free, as in Flask-RESTful
@@ -25,7 +25,11 @@ class Api(RestxApi):
 
 
 app = Flask(__name__)
-api = Api(app, doc=False)
+# Without the root endpoint flask-restx cannot render /swagger.json (it would
+# answer 500), so leave the spec out too. add_specs has to go to init_app():
+# the constructor does not pass it on.
+api = Api(doc=False)
+api.init_app(app, add_specs=False)
 
 logger = logging.getLogger()
 boards = {}
