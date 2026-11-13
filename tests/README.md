@@ -114,6 +114,16 @@ command the script drives with no pin behind it is warned about without mistakin
 `Board.create_board()` routing: no device → `None`, FTDI, PSOC, Bughopper V1,
 Bughopper V2 with/without the optional `hid` module, and PIC32CX.
 
+### REST interface tests (`tests/test_service.py`)
+
+Drive `pytactl.service` through Flask's test client against a mocked FTDI board
+built from the bundled default config: every GET endpoint, unknown boards and
+items, setting a pin with the value sent as JSON, form data or a query string
+(down to the GPIO write), commands and quick methods, the 400/404/500 error
+paths, the guard that keeps the URL from reaching arbitrary `Board` attributes,
+per-board serialisation on the board's executor, and that flask-restx's
+Swagger routes stay disabled so `/` remains the board list.
+
 ## Special-cased configs
 
 These are declared centrally in `tests/conftest.py`, each with a reason. All
