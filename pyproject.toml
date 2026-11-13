@@ -55,7 +55,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff==0.15.17", "pytest"]
+dev = ["ruff==0.17.4", "pytest"]
 
 [project.scripts]
 pytactl = "pytactl.cli:main"
