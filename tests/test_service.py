@@ -294,6 +294,7 @@ def test_put_quick_method_failure(board, client, monkeypatch):
     monkeypatch.setattr(board, "powerOn", boom)
     r = client.put(f"/{SERIAL}/quick/powerOn")
     assert r.status_code == 500
+    assert "hardware fell over" in r.get_json()["message"]
 
 
 def test_put_quick_method_on_unknown_board(board, client):
