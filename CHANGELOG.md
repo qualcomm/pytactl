@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The service answers a failed quick method or command with the error in the
   500 response's `message`, instead of a bare "Internal Server Error".
+- In the shell, `<command> 0` sets an FTDI pin LOW. The shell passed the value
+  on as a string and FTDI pins treated any non-empty string, including `0`, as
+  HIGH. A value that is not an integer is now reported instead of driving the
+  pin.
 
 ## [3.3] - 2026-11-11
 
