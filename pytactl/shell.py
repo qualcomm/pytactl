@@ -20,6 +20,25 @@ def make_h(name, comment=None):
     return h
 
 
+def make_pin_f(pin):
+    def f(cls, line):
+        # cmd passes the rest of the line as a string, convert it like oneshot
+        line = line.strip()
+        if not line:
+            value = 0
+        else:
+            try:
+                value = int(line)
+            except ValueError:
+                logger.error(
+                    f"Command '{pin.command}' value must be an integer, got '{line}'"
+                )
+                return
+        pin.set(value)
+
+    return f
+
+
 def make_f(quick_method):
     def f(cls, *args):
         quick_method.call()
@@ -102,7 +121,7 @@ def run_shell(serial=None, config_file_path=None, tac_config_path=None):
         method_name = f"do_{pin.command}"
         help_name = f"help_{pin.command}"
         logger.debug(f"Adding {method_name}")
-        method = pin.set
+        method = make_pin_f(pin)
         help_f = make_h(pin.command, pin.get("help_hint"))
         setattr(AlpacaCmd, method_name, method)
         setattr(AlpacaCmd, help_name, help_f)
