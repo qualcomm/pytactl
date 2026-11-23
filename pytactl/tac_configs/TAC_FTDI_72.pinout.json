@@ -4,7 +4,7 @@
     "schema_version": "1.0",
     "source": {
         "repository": "https://github.com/qualcomm/qcom-test-automation-controller.git",
-        "commit": "757cc972c88e4a1098881b2bc73f3d53eac286be",
+        "commit": "ad2e8cfe47a13c7771ce474f64eecee3941955fa",
         "path": "configurations",
         "file": "TAC_FTDI_72.tcnf"
     },
@@ -360,5 +360,18 @@
             "priority": 2
         }
     ],
-    "variables": []
+    "variables": [
+        {
+            "default_value": "1300",
+            "name": "edl"
+        },
+        {
+            "default_value": "8000",
+            "name": "fastboot"
+        },
+        {
+            "default_value": "8000",
+            "name": "uefi"
+        }
+    ]
 }
