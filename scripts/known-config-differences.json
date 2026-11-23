@@ -30,6 +30,11 @@
             "note": "Upstream 98aa34e adds firmware version 19 to supportedFirmwareVer.",
             "fingerprint": "sha256:feb877c76490f7088133f9cd04f02e46f24271fea728fd44fb502a4b0bc4ea5f",
             "upstream_commit": "03cddde77c5c72ef2b0753683e8ad4f8fc5ce6f8"
+        },
+        "devicelist.json": {
+            "note": "pytactl be3c09c adds a NordAu RIDE V2 entry (usb_descriptor KARUSSELLV2, TAC_PIC32CXAuto_54.pinout.json) that upstream does not have. PyTAC reports the KARUSSELL V2 debug board as KARUSSELLV2, so without it pytactl cannot match the board to its config. The vendored modification_date is kept as well.",
+            "fingerprint": "sha256:20d1995fa4dfbf94efee1483ee24490d17a972566c5f095ef58282bd4368fd2a",
+            "upstream_commit": "ad2e8cfe47a13c7771ce474f64eecee3941955fa"
         }
     }
 }

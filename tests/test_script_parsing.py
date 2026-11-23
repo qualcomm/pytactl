@@ -168,8 +168,8 @@ def test_variable_sharing_a_prefix_is_not_clobbered(tmp_path):
 
 
 def test_undeclared_variable_is_reported_by_name(tmp_path):
-    """TAC_FTDI_72 drives $edl/$uefi/$fastboot but declares no variables. There
-    is nothing to substitute and the delay is a board timing only the config can
+    """A script that drives $edl but declares no variables (as TAC_FTDI_72 did
+    before upstream ad2e8cfe47a1). There is nothing to substitute and the delay is a board timing only the config can
     supply, so say exactly that instead of letting a bare '$edl' reach exec()
     as a syntax error."""
     path = write_config(tmp_path, "def bootToEDL()\n\tbattery 1\n\tdelay $edl\n")

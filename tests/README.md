@@ -149,9 +149,8 @@ pytactl reports each of them at load time rather than failing obscurely later.
 
 **Fail to load** (`XFAIL_LOAD`):
 
-| Config | Reason |
-|--------|--------|
-| `TAC_FTDI_72.pinout.json` | script uses `$edl`/`$uefi`/`$fastboot` but the config declares no variables. Raises `ConfigScriptError` naming them; the delays are board timings only the config can supply |
+None at present. `TAC_FTDI_72.pinout.json` was listed here until upstream added the
+`edl`/`uefi`/`fastboot` variables its script uses.
 
 **Omit a required function** (`XFAIL_REQUIRED`) — load fine but don't define all
 three of `powerOn`/`powerOff`/`bootToEDL`:
@@ -183,7 +182,6 @@ when invoked. pytactl names the commands in a warning at load time:
 | `TAC_FTDI_56` | `usb1` — board only defines `usb0` |
 | `TAC_FTDI_65`, `TAC_FTDI_73` | `sedl`, `usb1` |
 | `TAC_FTDI_67` | `sedl`, `usb1`, and `sumxs2` — which looks like a transposition typo for the board's own `smuxs2` |
-| `TAC_FTDI_72` | listed here too, but never gets that far — it fails to load |
 
 ## Fixed rather than carried
 
